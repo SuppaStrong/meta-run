@@ -167,7 +167,7 @@ export default function App() {
           setRaceInfo(personalJson.data.oneItem);
         }
 
-        const teamRes = await fetch('/api/race/team/1');
+        const teamRes = await fetch('/api/race/team');
         const teamJson = await teamRes.json();
         const teamMembers = teamJson.data?.members || [];
         setTeamData(teamMembers);

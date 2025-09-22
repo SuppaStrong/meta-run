@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ page: string }> }
+  request: NextRequest
 ) {
-  const { page } = await params;
   
   try {
     const response = await axios.get(
-      `https://84race.com/api/v1/races/detail/16790/ranking_team/${page}`
+      `https://84race.com/api/v1/races/detail/16790/ranking_team`
     );
     console.log(response.data);
     return NextResponse.json(response.data);
