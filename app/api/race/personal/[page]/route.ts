@@ -12,9 +12,10 @@ export async function GET(
       `https://84race.com/api/v1/races/detail/16790/ranking_personal/${page}`
     );
     return NextResponse.json(response.data);
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: error.message },
+      { error: errorMessage },
       { status: 500 }
     );
   }

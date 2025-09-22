@@ -1,18 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import axios from 'axios';
 
-export async function GET(
-  request: NextRequest
-) {
-  
+export async function GET() {
   try {
     const response = await axios.get(
       `https://84race.com/api/v1/races/detail/16790/ranking_team`
     );
     return NextResponse.json(response.data);
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: error.message },
+      { error: errorMessage },
       { status: 500 }
     );
   }

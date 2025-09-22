@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 interface Member {
   id: number;
@@ -86,11 +86,67 @@ export default function App() {
       to { opacity: 1; transform: translateX(0); }
     }
     
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+    }
+    
     .animate-fade-in-up { animation: fade-in-up 1s ease-out; }
     .animate-slide-in { animation: slide-in 0.8s ease-out; }
+    .animate-shimmer { 
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      background-size: 200% 100%;
+      animation: shimmer 2s infinite;
+    }
+    .animate-float { animation: float 3s ease-in-out infinite; }
     .confetti-piece { position: fixed; width: 10px; height: 10px; animation: confetti-fall 3s linear infinite; z-index: 9999; }
     .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
     .text-shadow-lg { text-shadow: 0 4px 8px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.4); }
+    .gradient-text {
+      background: linear-gradient(135deg, #fbbf24, #f59e0b, #fb923c, #f97316);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      background-size: 200% auto;
+      animation: shimmer 3s linear infinite;
+    }
+    
+    .content-html {
+      line-height: 1.8;
+    }
+    
+    .content-html p {
+      margin-bottom: 1rem;
+    }
+    
+    .content-html ul {
+      list-style-type: disc;
+      margin-left: 2rem;
+      margin-bottom: 1rem;
+    }
+    
+    .content-html li {
+      margin-bottom: 0.5rem;
+    }
+    
+    .content-html b {
+      font-weight: bold;
+      color: #fbbf24;
+    }
+    
+    .content-html i {
+      font-style: italic;
+    }
+    
+    .content-html a {
+      color: #60a5fa;
+      text-decoration: underline;
+    }
   `;
 
   const Confetti = () => {
@@ -133,7 +189,7 @@ export default function App() {
     }
   };
 
-  const fetchDailyRankings = async (date: string) => {
+  const fetchDailyRankings = useCallback(async (date: string) => {
     setDailyLoading(true);
     try {
       const memberIds = personalData
@@ -154,7 +210,7 @@ export default function App() {
 
       const results = await response.json();
       
-      const enrichedResults = results.map((r: any) => {
+      const enrichedResults = results.map((r: DailyMemberKm) => {
         const member = personalData.find(m => m.bib_number === r.memberId);
         return {
           ...r,
@@ -170,7 +226,7 @@ export default function App() {
     } finally {
       setDailyLoading(false);
     }
-  };
+  }, [personalData]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -207,15 +263,162 @@ export default function App() {
     if (activeTab === 'daily' && personalData.length > 0) {
       fetchDailyRankings(selectedDate);
     }
-  }, [activeTab, selectedDate, personalData]);
+  }, [activeTab, selectedDate, personalData, fetchDailyRankings]);
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedDate(e.target.value);
   };
 
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    e.currentTarget.src = '/meta.png';
+  };
+
   const isPersonal = activeTab === 'personal';
   const isTeam = activeTab === 'team';
   const isDaily = activeTab === 'daily';
+
+  // Personal podium component
+  const PersonalPodium = () => {
+    if (personalData.length < 3) return null;
+    const top3 = personalData.slice(0, 3);
+
+    return (
+      <div className="hidden lg:block mb-8">
+        <div className="flex justify-center items-end gap-6 h-96">
+          {/* 2nd Place */}
+          <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+            <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={top3[1].avatar} alt="2nd" className="h-20 w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={handleImageError} />
+              <div className="absolute -top-2 -right-2 text-3xl">🥈</div>
+            </div>
+            <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-6 text-center h-40 w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
+              <div className="font-bold text-white text-lg truncate mb-2">{top3[1].full_name}</div>
+              <div className="text-sm text-gray-200 font-semibold">{parseFloat(top3[1].final_value).toFixed(2)} km</div>
+              <div className="text-xs text-gray-300 mt-1">{top3[1].team_name}</div>
+            </div>
+            <div className="bg-gradient-to-b from-gray-300 to-gray-500 w-full h-28 rounded-b-2xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-3xl">2</span>
+            </div>
+          </div>
+
+          {/* 1st Place */}
+          <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
+            <div className="relative mb-4 animate-float">
+              <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={top3[0].avatar} alt="1st" className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={handleImageError} />
+              </div>
+              <div className="absolute -top-3 -right-3 text-4xl animate-bounce">👑</div>
+            </div>
+            <div className="backdrop-blur-md bg-gradient-to-br from-yellow-400/30 via-orange-400/30 to-yellow-400/30 rounded-2xl p-6 text-center h-48 w-56 flex flex-col justify-center shadow-2xl border-2 border-yellow-300/40 relative overflow-hidden">
+              <div className="absolute inset-0 animate-shimmer"></div>
+              <div className="relative z-10">
+                <div className="text-2xl mb-2">🏆 CHAMPION</div>
+                <div className="font-bold text-white text-xl truncate mb-2">{top3[0].full_name}</div>
+                <div className="text-sm text-yellow-100 font-semibold">{parseFloat(top3[0].final_value).toFixed(2)} km</div>
+                <div className="text-xs text-yellow-200 mt-1">{top3[0].team_name}</div>
+              </div>
+            </div>
+            <div className="bg-gradient-to-b from-yellow-400 via-yellow-500 to-yellow-600 w-full h-40 rounded-b-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
+              <div className="absolute inset-0 animate-shimmer"></div>
+              <span className="text-white font-bold text-4xl relative z-10">1</span>
+            </div>
+          </div>
+
+          {/* 3rd Place */}
+          <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+            <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={top3[2].avatar} alt="3rd" className="h-20 w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={handleImageError} />
+              <div className="absolute -top-2 -right-2 text-3xl">🥉</div>
+            </div>
+            <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-6 text-center h-36 w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
+              <div className="font-bold text-white text-lg truncate mb-2">{top3[2].full_name}</div>
+              <div className="text-sm text-amber-200 font-semibold">{parseFloat(top3[2].final_value).toFixed(2)} km</div>
+              <div className="text-xs text-amber-300 mt-1">{top3[2].team_name}</div>
+            </div>
+            <div className="bg-gradient-to-b from-amber-600 to-amber-800 w-full h-24 rounded-b-2xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-3xl">3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Team podium component
+  const TeamPodium = () => {
+    if (teamData.length < 3) return null;
+    const top3 = teamData.slice(0, 3);
+
+    return (
+      <div className="hidden lg:block mb-8">
+        <div className="flex justify-center items-end gap-6 h-96">
+          {/* 2nd Place */}
+          <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+            <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
+              <div className="h-20 w-20 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center border-4 border-gray-300 shadow-xl">
+                <span className="text-3xl">👥</span>
+              </div>
+              <div className="absolute -top-2 -right-2 text-3xl">🥈</div>
+            </div>
+            <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-6 text-center h-40 w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
+              <div className="font-bold text-white text-lg truncate mb-2">{top3[1].name}</div>
+              <div className="text-sm text-gray-200 font-semibold">{parseFloat(top3[1].total_distance).toFixed(2)} km</div>
+              <div className="text-xs text-gray-300 mt-1">{top3[1].total} thành viên</div>
+            </div>
+            <div className="bg-gradient-to-b from-gray-300 to-gray-500 w-full h-28 rounded-b-2xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-3xl">2</span>
+            </div>
+          </div>
+
+          {/* 1st Place */}
+          <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
+            <div className="relative mb-4 animate-float">
+              <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
+                <div className="h-24 w-24 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center border-4 border-white shadow-2xl">
+                  <span className="text-4xl">👥</span>
+                </div>
+              </div>
+              <div className="absolute -top-3 -right-3 text-4xl animate-bounce">👑</div>
+            </div>
+            <div className="backdrop-blur-md bg-gradient-to-br from-yellow-400/30 via-orange-400/30 to-yellow-400/30 rounded-2xl p-6 text-center h-48 w-56 flex flex-col justify-center shadow-2xl border-2 border-yellow-300/40 relative overflow-hidden">
+              <div className="absolute inset-0 animate-shimmer"></div>
+              <div className="relative z-10">
+                <div className="text-2xl mb-2">🏆 TOP TEAM</div>
+                <div className="font-bold text-white text-xl truncate mb-2">{top3[0].name}</div>
+                <div className="text-sm text-yellow-100 font-semibold">{parseFloat(top3[0].total_distance).toFixed(2)} km</div>
+                <div className="text-xs text-yellow-200 mt-1">{top3[0].total} thành viên</div>
+              </div>
+            </div>
+            <div className="bg-gradient-to-b from-yellow-400 via-yellow-500 to-yellow-600 w-full h-40 rounded-b-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
+              <div className="absolute inset-0 animate-shimmer"></div>
+              <span className="text-white font-bold text-4xl relative z-10">1</span>
+            </div>
+          </div>
+
+          {/* 3rd Place */}
+          <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+            <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
+              <div className="h-20 w-20 rounded-full bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center border-4 border-amber-600 shadow-xl">
+                <span className="text-3xl">👥</span>
+              </div>
+              <div className="absolute -top-2 -right-2 text-3xl">🥉</div>
+            </div>
+            <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-6 text-center h-36 w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
+              <div className="font-bold text-white text-lg truncate mb-2">{top3[2].name}</div>
+              <div className="text-sm text-amber-200 font-semibold">{parseFloat(top3[2].total_distance).toFixed(2)} km</div>
+              <div className="text-xs text-amber-300 mt-1">{top3[2].total} thành viên</div>
+            </div>
+            <div className="bg-gradient-to-b from-amber-600 to-amber-800 w-full h-24 rounded-b-2xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-3xl">3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Daily podium component
   const DailyPodium = () => {
@@ -224,10 +427,10 @@ export default function App() {
     return (
       <div className="hidden lg:block mb-8">
         <div className="flex justify-center items-end gap-6 h-96">
-          {/* 2nd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            <div className="relative mb-4">
-              <img src={dailyRankings[1].avatar} alt="2nd" className="h-20 w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={(e: any) => { e.target.src = '/meta.png'; }} />
+            <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={dailyRankings[1].avatar} alt="2nd" className="h-20 w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={handleImageError} />
               <div className="absolute -top-2 -right-2 text-3xl">🥈</div>
             </div>
             <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-6 text-center h-40 w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
@@ -240,16 +443,16 @@ export default function App() {
             </div>
           </div>
 
-          {/* 1st Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
-            <div className="relative mb-4">
+            <div className="relative mb-4 animate-float">
               <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
-                <img src={dailyRankings[0].avatar} alt="1st" className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={(e: any) => { e.target.src = '/meta.png'; }} />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={dailyRankings[0].avatar} alt="1st" className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={handleImageError} />
               </div>
               <div className="absolute -top-3 -right-3 text-4xl animate-bounce">👑</div>
             </div>
             <div className="backdrop-blur-md bg-gradient-to-br from-yellow-400/30 via-orange-400/30 to-yellow-400/30 rounded-2xl p-6 text-center h-48 w-56 flex flex-col justify-center shadow-2xl border-2 border-yellow-300/40 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-yellow-400/10 via-transparent to-yellow-400/10 animate-pulse"></div>
+              <div className="absolute inset-0 animate-shimmer"></div>
               <div className="relative z-10">
                 <div className="text-2xl mb-2">🏆 TOP 1</div>
                 <div className="font-bold text-white text-xl truncate mb-2">{dailyRankings[0].memberName}</div>
@@ -258,15 +461,15 @@ export default function App() {
               </div>
             </div>
             <div className="bg-gradient-to-b from-yellow-400 via-yellow-500 to-yellow-600 w-full h-40 rounded-b-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
+              <div className="absolute inset-0 animate-shimmer"></div>
               <span className="text-white font-bold text-4xl relative z-10">1</span>
             </div>
           </div>
 
-          {/* 3rd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-            <div className="relative mb-4">
-              <img src={dailyRankings[2].avatar} alt="3rd" className="h-20 w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={(e: any) => { e.target.src = '/meta.png'; }} />
+            <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={dailyRankings[2].avatar} alt="3rd" className="h-20 w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={handleImageError} />
               <div className="absolute -top-2 -right-2 text-3xl">🥉</div>
             </div>
             <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-6 text-center h-36 w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
@@ -288,9 +491,9 @@ export default function App() {
       <style dangerouslySetInnerHTML={{ __html: customStyles }} />
       {showConfetti && <Confetti />}
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white">
-        {/* Race Header */}
         <div className="relative overflow-hidden bg-black">
           <div className="absolute inset-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src={raceInfo?.thumbnail || 'https://84race.com/public/media//meta.jpg'} 
               alt="Race Banner" 
@@ -308,18 +511,19 @@ export default function App() {
                 </span>
               </div>
 
-              <h1 className="text-3xl md:text-5xl lg:text-6xl font-black text-white mb-6 text-shadow-lg animate-fade-in-up">
+              <h1 className="text-3xl md:text-5xl lg:text-6xl font-black text-white mb-6 text-shadow-lg animate-fade-in-up gradient-text">
                 {raceInfo?.meta_title || raceInfo?.title || 'META RUN 2025'}
               </h1>
 
-              {raceInfo?.meta_description && (
-                <p className="text-lg md:text-xl text-gray-300 mb-8 max-w-3xl animate-fade-in-up">
-                  {raceInfo.meta_description}
-                </p>
+              {raceInfo?.content && (
+                <div 
+                  className="text-base md:text-lg text-gray-300 mb-8 max-w-4xl animate-fade-in-up content-html"
+                  dangerouslySetInnerHTML={{ __html: raceInfo.content }}
+                />
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 animate-fade-in-up">
-                <div className="backdrop-blur-xl bg-white/10 rounded-xl p-4 border border-white/20">
+                <div className="backdrop-blur-xl bg-white/10 rounded-xl p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 transform hover:scale-105">
                   <div className="flex items-center gap-3">
                     <div className="text-3xl">📅</div>
                     <div>
@@ -337,7 +541,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="backdrop-blur-xl bg-white/10 rounded-xl p-4 border border-white/20">
+                <div className="backdrop-blur-xl bg-white/10 rounded-xl p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 transform hover:scale-105">
                   <div className="flex items-center gap-3">
                     <div className="text-3xl">🎯</div>
                     <div>
@@ -349,7 +553,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="backdrop-blur-xl bg-white/10 rounded-xl p-4 border border-white/20">
+                <div className="backdrop-blur-xl bg-white/10 rounded-xl p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 transform hover:scale-105">
                   <div className="flex items-center gap-3">
                     <div className="text-3xl">👥</div>
                     <div>
@@ -417,114 +621,117 @@ export default function App() {
             </div>
           )}
 
-          {/* Personal Rankings */}
           {!loading && isPersonal && (
-            <div className="overflow-hidden rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
-              <table className="w-full">
-                <thead className="backdrop-blur-sm bg-white/20">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-white">🏅 Hạng</th>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-white">👤 Tên</th>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-white">🏃‍♂️ Quãng đường</th>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-white">📊 Trạng thái</th>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-white">Team</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                  {personalData.map((member, index) => {
-                    const rank = member.order;
-                    const rankStyle = getRankStyling(rank);
-                    const totalKm = parseFloat(member.final_value || '0');
-                    const percentage = parseFloat(member.percent_finish || '0');
+            <div className="space-y-6 pt-20">
+              <PersonalPodium />
+              <div className="overflow-hidden rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
+                <table className="w-full">
+                  <thead className="backdrop-blur-sm bg-white/20">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-white">🏅 Hạng</th>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-white">👤 Tên</th>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-white">🏃‍♂️ Quãng đường</th>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-white">📊 Trạng thái</th>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-white">Team</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/10">
+                    {personalData.map((member, index) => {
+                      const rank = member.order;
+                      const rankStyle = getRankStyling(rank);
+                      const totalKm = parseFloat(member.final_value || '0');
+                      const percentage = parseFloat(member.percent_finish || '0');
 
-                    return (
-                      <tr key={member.id || index} className={`hover:bg-white/5 transition-colors duration-200 ${rank <= 3 ? 'bg-white/5' : ''}`}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full ${rankStyle.bg} ${rankStyle.text} shadow-lg`}>
-                            <span className="text-sm font-bold">{rankStyle.icon} {rank}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <img src={member.avatar || '/meta.png'} alt="Avatar" className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20 shadow-md" onError={(e: any) => { e.target.src = '/meta.png'; }} />
-                            <div>
-                              <div className="text-sm font-semibold text-white">{member.full_name}</div>
-                              <div className="text-xs text-gray-300">BIB: {member.bib_number || 'N/A'}</div>
+                      return (
+                        <tr key={member.id || index} className={`hover:bg-white/5 transition-colors duration-200 ${rank <= 3 ? 'bg-white/5' : ''}`}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full ${rankStyle.bg} ${rankStyle.text} shadow-lg`}>
+                              <span className="text-sm font-bold">{rankStyle.icon} {rank}</span>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-semibold text-white">{totalKm.toFixed(2)} km</div>
-                          <div className="text-xs text-gray-400">{percentage.toFixed(1)}%</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${percentage >= 100 ? 'bg-green-500/30 text-green-200' : 'bg-orange-500/30 text-orange-200'}`}>
-                            {percentage >= 100 ? '✅ Hoàn thành' : '🏃‍♂️ Đang thi'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-300">{member.team_name || 'N/A'}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={member.avatar || '/meta.png'} alt="Avatar" className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20 shadow-md" onError={handleImageError} />
+                              <div>
+                                <div className="text-sm font-semibold text-white">{member.full_name}</div>
+                                <div className="text-xs text-gray-300">BIB: {member.bib_number || 'N/A'}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-semibold text-white">{totalKm.toFixed(2)} km</div>
+                            <div className="text-xs text-gray-400">{percentage.toFixed(1)}%</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${percentage >= 100 ? 'bg-green-500/30 text-green-200' : 'bg-orange-500/30 text-orange-200'}`}>
+                              {percentage >= 100 ? '✅ Hoàn thành' : '🏃‍♂️ Đang thi'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-300">{member.team_name || 'N/A'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
-          {/* Team Rankings */}
           {!loading && isTeam && (
-            <div className="overflow-hidden rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
-              <table className="w-full">
-                <thead className="backdrop-blur-sm bg-white/20">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-white">🏅 Hạng</th>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-white">👥 Tên đội</th>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-white">👤 Thành viên</th>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-white">📊 TỔNG KM</th>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-white">📈 KM TB</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                  {teamData.map((team, index) => {
-                    const rank = parseInt(team.order);
-                    const rankStyle = getRankStyling(rank);
+            <div className="space-y-6 pt-20">
+              <TeamPodium />
+              <div className="overflow-hidden rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
+                <table className="w-full">
+                  <thead className="backdrop-blur-sm bg-white/20">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-white">🏅 Hạng</th>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-white">👥 Tên đội</th>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-white">👤 Thành viên</th>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-white">📊 TỔNG KM</th>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-white">📈 KM TB</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/10">
+                    {teamData.map((team, index) => {
+                      const rank = parseInt(team.order);
+                      const rankStyle = getRankStyling(rank);
 
-                    return (
-                      <tr key={team.id || index} className={`hover:bg-white/5 transition-colors ${rank <= 3 ? 'bg-white/5' : ''}`}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full ${rankStyle.bg} ${rankStyle.text} shadow-lg`}>
-                            <span className="text-sm font-bold">{rankStyle.icon} {rank}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center mr-3 border-2 border-white/20 shadow-md">
-                              <span className="text-xl">👥</span>
+                      return (
+                        <tr key={team.id || index} className={`hover:bg-white/5 transition-colors ${rank <= 3 ? 'bg-white/5' : ''}`}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full ${rankStyle.bg} ${rankStyle.text} shadow-lg`}>
+                              <span className="text-sm font-bold">{rankStyle.icon} {rank}</span>
                             </div>
-                            <div className="text-sm font-semibold text-white">{team.name}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-semibold text-white">{team.total}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-bold text-orange-400">{parseFloat(team.total_distance).toFixed(2)} km</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-semibold text-blue-400">{parseFloat(team.avg_distance).toFixed(2)} km</div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center mr-3 border-2 border-white/20 shadow-md">
+                                <span className="text-xl">👥</span>
+                              </div>
+                              <div className="text-sm font-semibold text-white">{team.name}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-semibold text-white">{team.total}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-bold text-orange-400">{parseFloat(team.total_distance).toFixed(2)} km</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-semibold text-blue-400">{parseFloat(team.avg_distance).toFixed(2)} km</div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
-          {/* Daily Rankings */}
           {!loading && isDaily && (
-            <div className="space-y-6">
-              {/* Daily Podium */}
+            <div className="space-y-6 pt-20">
               {!dailyLoading && dailyRankings.length >= 3 && <DailyPodium />}
 
               <div className="overflow-hidden rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
@@ -558,7 +765,8 @@ export default function App() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center">
-                                <img src={record.avatar} alt={record.memberName} className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20 shadow-md" onError={(e: any) => { e.target.src = '/meta.png'; }} />
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={record.avatar} alt={record.memberName} className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20 shadow-md" onError={handleImageError} />
                                 <div>
                                   <div className="text-sm font-semibold text-white">{record.memberName}</div>
                                   <div className="text-xs text-gray-300">BIB: {record.memberId}</div>

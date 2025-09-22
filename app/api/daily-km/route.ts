@@ -2,22 +2,34 @@ import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
-const dailyCache = new Map<string, any>();
+const dailyCache = new Map<string, CacheEntry>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 interface CacheEntry {
-  data: any;
+  data: DailyKmResult[];
   timestamp: number;
+}
+
+interface DailyKmResult {
+  memberId: number;
+  date: string;
+  km: number;
+}
+
+interface RequestBody {
+  memberIds: number[];
+  date?: string;
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { memberIds, date } = await request.json();
+    const body = await request.json() as RequestBody;
+    const { memberIds, date } = body;
     const targetDate = date || new Date().toISOString().split('T')[0];
     const cacheKey = `daily_${targetDate}`;
 
     // Check cache
-    const cached = dailyCache.get(cacheKey) as CacheEntry | undefined;
+    const cached = dailyCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
       console.log('Returning cached data for', targetDate);
       return NextResponse.json(cached.data);
@@ -26,7 +38,7 @@ export async function POST(request: NextRequest) {
     console.log(`Fetching daily km for ${memberIds.length} members on ${targetDate}`);
 
     const results = await Promise.all(
-      memberIds.map(async (memberId: number) => {
+      memberIds.map(async (memberId: number): Promise<DailyKmResult> => {
         try {
           console.log(`Scraping member ${memberId}...`);
           const response = await axios.get(`https://84race.com/member/${memberId}`, {
@@ -75,8 +87,9 @@ export async function POST(request: NextRequest) {
             date: targetDate,
             km: kmForDate
           };
-        } catch (error: any) {
-          console.error(`Error fetching member ${memberId}:`, error.message);
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.error(`Error fetching member ${memberId}:`, errorMessage);
           return {
             memberId,
             date: targetDate,
@@ -97,10 +110,11 @@ export async function POST(request: NextRequest) {
 
     console.log(`Successfully fetched data for ${results.length} members`);
     return NextResponse.json(results);
-  } catch (error: any) {
-    console.error('Error in daily-km API:', error);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error in daily-km API:', errorMessage);
     return NextResponse.json(
-      { error: error.message },
+      { error: errorMessage },
       { status: 500 }
     );
   }

@@ -2,7 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
-const cache = new Map<string, { data: any; timestamp: number }>();
+interface CacheEntry {
+  data: MemberData;
+  timestamp: number;
+}
+
+interface DailyData {
+  date: string;
+  km: number;
+}
+
+interface MemberData {
+  memberId: string;
+  dailyData: DailyData[];
+  lastUpdate: string;
+}
+
+const cache = new Map<string, CacheEntry>();
 const CACHE_DURATION = 24 * 60 * 60 * 1000;
 
 export async function GET(
@@ -21,7 +37,7 @@ export async function GET(
     const response = await axios.get(`https://84race.com/member/${id}`);
     const $ = cheerio.load(response.data);
 
-    const dailyData: Array<{ date: string; km: number }> = [];
+    const dailyData: DailyData[] = [];
     
     $('table tbody tr').each((i, row) => {
       const dateText = $(row).find('td:nth-child(1)').text().trim();
@@ -35,7 +51,7 @@ export async function GET(
       }
     });
 
-    const result = {
+    const result: MemberData = {
       memberId: id,
       dailyData,
       lastUpdate: new Date().toISOString()
@@ -43,7 +59,8 @@ export async function GET(
 
     cache.set(cacheKey, { data: result, timestamp: Date.now() });
     return NextResponse.json(result);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
