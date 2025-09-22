@@ -9,7 +9,6 @@ export async function GET(
     const response = await axios.get(
       `https://84race.com/api/v1/races/detail/16790/ranking_team`
     );
-    console.log(response.data);
     return NextResponse.json(response.data);
   } catch (error: any) {
     return NextResponse.json(
