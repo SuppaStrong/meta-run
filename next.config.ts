@@ -1,7 +1,17 @@
-import type { NextConfig } from "next";
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '84race.com',
+        port: '',
+        pathname: '/**',
+      },
+    ],
+  },
+  // Fix CORS issue in development
+  allowedDevOrigins: ['http://127.0.2.2'],
+}
 
-const nextConfig: NextConfig = {
-  allowedDevOrigins: ['local-origin.dev', '*.local-origin.dev'],
-};
-
-export default nextConfig;
+module.exports = nextConfig
