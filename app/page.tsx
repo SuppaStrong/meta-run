@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 
 interface Member {
   id: number;
@@ -317,7 +318,7 @@ export default function App() {
         <div className="flex justify-center items-end gap-6 h-96">
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
-              <img src={top3[1].avatar} alt="2nd" className="h-20 w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={handleImageError} />
+              <Image src={top3[1].avatar} alt="2nd" className="h-20 w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={handleImageError} />
               <div className="absolute -top-2 -right-2 text-3xl">🥈</div>
             </div>
             <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-6 text-center h-40 w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
@@ -333,7 +334,7 @@ export default function App() {
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
             <div className="relative mb-4 animate-float">
               <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
-                <img src={top3[0].avatar} alt="1st" className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={handleImageError} />
+                <Image src={top3[0].avatar} alt="1st" className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={handleImageError} />
               </div>
               <div className="absolute -top-3 -right-3 text-4xl animate-bounce">👑</div>
             </div>
@@ -354,7 +355,7 @@ export default function App() {
 
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
-              <img src={top3[2].avatar} alt="3rd" className="h-20 w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={handleImageError} />
+              <Image src={top3[2].avatar} alt="3rd" className="h-20 w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={handleImageError} />
               <div className="absolute -top-2 -right-2 text-3xl">🥉</div>
             </div>
             <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-6 text-center h-36 w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
@@ -471,7 +472,7 @@ export default function App() {
         <div className="flex justify-center items-end gap-6 h-96">
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
-              <img src={dailyRankings[1].avatar} alt="2nd" className="h-20 w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={handleImageError} />
+              <Image src={dailyRankings[1].avatar} alt="2nd" className="h-20 w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={handleImageError} />
               <div className="absolute -top-2 -right-2 text-3xl">🥈</div>
             </div>
             <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-6 text-center h-40 w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
@@ -487,7 +488,7 @@ export default function App() {
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
             <div className="relative mb-4 animate-float">
               <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
-                <img src={dailyRankings[0].avatar} alt="1st" className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={handleImageError} />
+                <Image src={dailyRankings[0].avatar} alt="1st" className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={handleImageError} />
               </div>
               <div className="absolute -top-3 -right-3 text-4xl animate-bounce">👑</div>
             </div>
@@ -508,7 +509,7 @@ export default function App() {
 
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
-              <img src={dailyRankings[2].avatar} alt="3rd" className="h-20 w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={handleImageError} />
+              <Image src={dailyRankings[2].avatar} alt="3rd" className="h-20 w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={handleImageError} />
               <div className="absolute -top-2 -right-2 text-3xl">🥉</div>
             </div>
             <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-6 text-center h-36 w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
@@ -532,8 +533,8 @@ export default function App() {
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white">
         <div className="relative overflow-hidden bg-black">
           <div className="absolute inset-0">
-            <img 
-              src={raceInfo?.thumbnail || 'https://84race.com/public/media//meta.jpg'} 
+            <Image 
+              src='meta.jpg'
               alt="Race Banner" 
               className="w-full h-full object-cover opacity-40"
             />
@@ -697,7 +698,7 @@ export default function App() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
-                              <img src={member.avatar || '/meta.png'} alt="Avatar" className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20 shadow-md" onError={handleImageError} />
+                              <Image src={member.avatar || '/meta.png'} alt="Avatar" className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20 shadow-md" onError={handleImageError} />
                               <div>
                                 <div className="text-sm font-semibold text-white">{member.full_name}</div>
                                 <div className="text-xs text-gray-300">BIB: {member.bib_number || 'N/A'}</div>
@@ -827,7 +828,7 @@ export default function App() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center">
-                                <img src={record.avatar} alt={record.memberName} className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20 shadow-md" onError={handleImageError} />
+                                <Image src={record.avatar} alt={record.memberName} className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20 shadow-md" onError={handleImageError} />
                                 <div>
                                   <div className="text-sm font-semibold text-white">{record.memberName}</div>
                                   <div className="text-xs text-gray-300">BIB: {record.memberId}</div>

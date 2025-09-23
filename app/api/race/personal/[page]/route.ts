@@ -17,7 +17,8 @@ export async function GET(
   
   try {
     const response = await axios.get(
-      'https://84race.com/api/v1/races/detail/16790/ranking_personal/${page}', { headers }
+      `https://84race.com/api/v1/races/detail/16790/ranking_personal/${page}`, 
+      { headers }
     );
     return NextResponse.json(response.data);
   } catch (error) {

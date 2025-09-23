@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import React, { useState, useEffect } from 'react';
 
 interface KmAdjustment {
@@ -160,9 +161,9 @@ export default function AdminPage() {
           </button>
           
           <div className="mt-6 text-center">
-            <a href="/" className="text-orange-400 hover:text-orange-300 text-sm">
+            <Link href="/" className="text-orange-400 hover:text-orange-300 text-sm">
               ← Quay lại trang chủ
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -182,12 +183,12 @@ export default function AdminPage() {
             <p className="text-gray-400">Thêm/xóa điều chỉnh km cho các vận động viên</p>
           </div>
           <div className="flex gap-4">
-            <a 
+            <Link 
               href="/"
               className="px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
             >
               🏠 Trang chủ
-            </a>
+            </Link>
             <button
               onClick={handleLogout}
               className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"

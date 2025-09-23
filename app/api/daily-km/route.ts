@@ -23,6 +23,13 @@ interface RequestBody {
   date?: string;
 }
 
+interface KmAdjustment {
+  bibNumber: number;
+  adjustmentKm: number;
+  date: string;
+  reason?: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as RequestBody;
@@ -60,7 +67,6 @@ export async function POST(request: NextRequest) {
             return `${year}-${month}-${day}`;
           };
 
-          // Find all activity posts
           $('.post').each((i, post) => {
             const timeText = $(post).find('time').text().trim();
             
@@ -109,12 +115,11 @@ export async function POST(request: NextRequest) {
       );
       
       if (adjustmentsResponse.ok) {
-        const adjustments = await adjustmentsResponse.json();
+        const adjustments: KmAdjustment[] = await adjustmentsResponse.json();
         
-        // Apply adjustments
         results.forEach(result => {
           const adjustment = adjustments.find(
-            (adj: any) => adj.bibNumber === result.memberId
+            (adj) => adj.bibNumber === result.memberId
           );
           
           if (adjustment) {
