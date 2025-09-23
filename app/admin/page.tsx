@@ -24,8 +24,7 @@ export default function AdminPage() {
     reason: ''
   });
 
-  // Simple password check (trong production nên dùng proper authentication)
-  const ADMIN_PASSWORD = 'meta2025'; // Thay đổi password này!
+  const ADMIN_PASSWORD = 'meta@2025'; // Thay đổi password này!
 
   useEffect(() => {
     // Check if already logged in (stored in sessionStorage)
