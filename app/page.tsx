@@ -64,6 +64,8 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showConfetti, setShowConfetti] = useState(false);
   const [countTotalDistance, setCountTotalDistance] = useState(0);
+  const [teamSortBy, setTeamSortBy] = useState<'total' | 'average'>('total');
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
   const customStyles = `
     @keyframes fade-in-up {
@@ -147,6 +149,22 @@ export default function App() {
       color: #60a5fa;
       text-decoration: underline;
     }
+
+    .description-collapsed {
+      max-height: 100px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .description-collapsed::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 50px;
+      background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.9));
+    }
   `;
 
   const Confetti = () => {
@@ -188,6 +206,18 @@ export default function App() {
         return { bg: 'bg-gray-600', text: 'text-orange-400 font-medium', icon: '', glow: '' };
     }
   };
+
+  // Sort teams based on selected criteria
+  const getSortedTeams = useCallback(() => {
+    const sorted = [...teamData].sort((a, b) => {
+      if (teamSortBy === 'total') {
+        return parseFloat(b.total_distance) - parseFloat(a.total_distance);
+      } else {
+        return parseFloat(b.avg_distance) - parseFloat(a.avg_distance);
+      }
+    });
+    return sorted;
+  }, [teamData, teamSortBy]);
 
   const fetchDailyRankings = useCallback(async (date: string) => {
     setDailyLoading(true);
@@ -285,10 +315,8 @@ export default function App() {
     return (
       <div className="hidden lg:block mb-8">
         <div className="flex justify-center items-end gap-6 h-96">
-          {/* 2nd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={top3[1].avatar} alt="2nd" className="h-20 w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={handleImageError} />
               <div className="absolute -top-2 -right-2 text-3xl">🥈</div>
             </div>
@@ -302,11 +330,9 @@ export default function App() {
             </div>
           </div>
 
-          {/* 1st Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
             <div className="relative mb-4 animate-float">
               <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={top3[0].avatar} alt="1st" className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={handleImageError} />
               </div>
               <div className="absolute -top-3 -right-3 text-4xl animate-bounce">👑</div>
@@ -326,10 +352,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* 3rd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={top3[2].avatar} alt="3rd" className="h-20 w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={handleImageError} />
               <div className="absolute -top-2 -right-2 text-3xl">🥉</div>
             </div>
@@ -349,13 +373,18 @@ export default function App() {
 
   // Team podium component
   const TeamPodium = () => {
-    if (teamData.length < 3) return null;
-    const top3 = teamData.slice(0, 3);
+    const sortedTeams = getSortedTeams();
+    if (sortedTeams.length < 3) return null;
+    const top3 = sortedTeams.slice(0, 3);
 
     return (
       <div className="hidden lg:block mb-8">
+        <div className="text-center mb-6">
+          <h3 className="text-xl font-bold text-orange-400">
+            Top 3 theo {teamSortBy === 'total' ? 'Tổng KM' : 'KM Trung Bình'}
+          </h3>
+        </div>
         <div className="flex justify-center items-end gap-6 h-96">
-          {/* 2nd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
               <div className="h-20 w-20 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center border-4 border-gray-300 shadow-xl">
@@ -365,7 +394,12 @@ export default function App() {
             </div>
             <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-6 text-center h-40 w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
               <div className="font-bold text-white text-lg truncate mb-2">{top3[1].name}</div>
-              <div className="text-sm text-gray-200 font-semibold">{parseFloat(top3[1].total_distance).toFixed(2)} km</div>
+              <div className="text-sm text-gray-200 font-semibold">
+                {teamSortBy === 'total' 
+                  ? `${parseFloat(top3[1].total_distance).toFixed(2)} km`
+                  : `${parseFloat(top3[1].avg_distance).toFixed(2)} km TB`
+                }
+              </div>
               <div className="text-xs text-gray-300 mt-1">{top3[1].total} thành viên</div>
             </div>
             <div className="bg-gradient-to-b from-gray-300 to-gray-500 w-full h-28 rounded-b-2xl flex items-center justify-center shadow-lg">
@@ -373,7 +407,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* 1st Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
             <div className="relative mb-4 animate-float">
               <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
@@ -388,7 +421,12 @@ export default function App() {
               <div className="relative z-10">
                 <div className="text-2xl mb-2">🏆 TOP TEAM</div>
                 <div className="font-bold text-white text-xl truncate mb-2">{top3[0].name}</div>
-                <div className="text-sm text-yellow-100 font-semibold">{parseFloat(top3[0].total_distance).toFixed(2)} km</div>
+                <div className="text-sm text-yellow-100 font-semibold">
+                  {teamSortBy === 'total' 
+                    ? `${parseFloat(top3[0].total_distance).toFixed(2)} km`
+                    : `${parseFloat(top3[0].avg_distance).toFixed(2)} km TB`
+                  }
+                </div>
                 <div className="text-xs text-yellow-200 mt-1">{top3[0].total} thành viên</div>
               </div>
             </div>
@@ -398,7 +436,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* 3rd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
               <div className="h-20 w-20 rounded-full bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center border-4 border-amber-600 shadow-xl">
@@ -408,7 +445,12 @@ export default function App() {
             </div>
             <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-6 text-center h-36 w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
               <div className="font-bold text-white text-lg truncate mb-2">{top3[2].name}</div>
-              <div className="text-sm text-amber-200 font-semibold">{parseFloat(top3[2].total_distance).toFixed(2)} km</div>
+              <div className="text-sm text-amber-200 font-semibold">
+                {teamSortBy === 'total' 
+                  ? `${parseFloat(top3[2].total_distance).toFixed(2)} km`
+                  : `${parseFloat(top3[2].avg_distance).toFixed(2)} km TB`
+                }
+              </div>
               <div className="text-xs text-amber-300 mt-1">{top3[2].total} thành viên</div>
             </div>
             <div className="bg-gradient-to-b from-amber-600 to-amber-800 w-full h-24 rounded-b-2xl flex items-center justify-center shadow-lg">
@@ -429,7 +471,6 @@ export default function App() {
         <div className="flex justify-center items-end gap-6 h-96">
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={dailyRankings[1].avatar} alt="2nd" className="h-20 w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={handleImageError} />
               <div className="absolute -top-2 -right-2 text-3xl">🥈</div>
             </div>
@@ -446,7 +487,6 @@ export default function App() {
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
             <div className="relative mb-4 animate-float">
               <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={dailyRankings[0].avatar} alt="1st" className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={handleImageError} />
               </div>
               <div className="absolute -top-3 -right-3 text-4xl animate-bounce">👑</div>
@@ -468,7 +508,6 @@ export default function App() {
 
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={dailyRankings[2].avatar} alt="3rd" className="h-20 w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={handleImageError} />
               <div className="absolute -top-2 -right-2 text-3xl">🥉</div>
             </div>
@@ -493,7 +532,6 @@ export default function App() {
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white">
         <div className="relative overflow-hidden bg-black">
           <div className="absolute inset-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src={raceInfo?.thumbnail || 'https://84race.com/public/media//meta.jpg'} 
               alt="Race Banner" 
@@ -516,10 +554,18 @@ export default function App() {
               </h1>
 
               {raceInfo?.content && (
-                <div 
-                  className="text-base md:text-lg text-gray-300 mb-8 max-w-4xl animate-fade-in-up content-html"
-                  dangerouslySetInnerHTML={{ __html: raceInfo.content }}
-                />
+                <div className="animate-fade-in-up mb-4">
+                  <div 
+                    className={`text-base md:text-lg text-gray-300 max-w-4xl content-html ${!isDescriptionExpanded ? 'description-collapsed' : ''}`}
+                    dangerouslySetInnerHTML={{ __html: raceInfo.content }}
+                  />
+                  <button
+                    onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                    className="mt-2 px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 rounded-lg text-orange-300 text-sm font-semibold transition-all"
+                  >
+                    {isDescriptionExpanded ? '▲ Thu gọn' : '▼ Hiển thị thêm'}
+                  </button>
+                </div>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 animate-fade-in-up">
@@ -651,7 +697,6 @@ export default function App() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={member.avatar || '/meta.png'} alt="Avatar" className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20 shadow-md" onError={handleImageError} />
                               <div>
                                 <div className="text-sm font-semibold text-white">{member.full_name}</div>
@@ -680,6 +725,23 @@ export default function App() {
 
           {!loading && isTeam && (
             <div className="space-y-6 pt-20">
+              <div className="flex justify-center mb-6">
+                <div className="backdrop-blur-md bg-white/10 rounded-xl p-1 border border-white/20">
+                  <button
+                    onClick={() => setTeamSortBy('total')}
+                    className={`px-6 py-2 rounded-lg font-semibold transition-all ${teamSortBy === 'total' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:text-white'}`}
+                  >
+                    📊 Tổng KM
+                  </button>
+                  <button
+                    onClick={() => setTeamSortBy('average')}
+                    className={`px-6 py-2 rounded-lg font-semibold transition-all ${teamSortBy === 'average' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:text-white'}`}
+                  >
+                    📈 KM Trung Bình
+                  </button>
+                </div>
+              </div>
+
               <TeamPodium />
               <div className="overflow-hidden rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
                 <table className="w-full">
@@ -693,8 +755,8 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/10">
-                    {teamData.map((team, index) => {
-                      const rank = parseInt(team.order);
+                    {getSortedTeams().map((team, index) => {
+                      const rank = index + 1;
                       const rankStyle = getRankStyling(rank);
 
                       return (
@@ -765,7 +827,6 @@ export default function App() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={record.avatar} alt={record.memberName} className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20 shadow-md" onError={handleImageError} />
                                 <div>
                                   <div className="text-sm font-semibold text-white">{record.memberName}</div>

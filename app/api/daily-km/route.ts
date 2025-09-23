@@ -14,6 +14,8 @@ interface DailyKmResult {
   memberId: number;
   date: string;
   km: number;
+  originalKm?: number;
+  adjustmentKm?: number;
 }
 
 interface RequestBody {
@@ -53,10 +55,9 @@ export async function POST(request: NextRequest) {
           
           // Parse date format: "22/09/2025 07:47:41 (GMT+7)"
           const formatDateForComparison = (dateStr: string) => {
-            // Extract just the date part before the time
-            const datePart = dateStr.split(' ')[0]; // "22/09/2025"
+            const datePart = dateStr.split(' ')[0];
             const [day, month, year] = datePart.split('/');
-            return `${year}-${month}-${day}`; // Convert to "2025-09-22" format
+            return `${year}-${month}-${day}`;
           };
 
           // Find all activity posts
@@ -67,7 +68,6 @@ export async function POST(request: NextRequest) {
               const activityDate = formatDateForComparison(timeText);
               
               if (activityDate === targetDate) {
-                // Find the distance cell
                 const distanceText = $(post).find('.cell').first().find('.ibl').first().text().trim();
                 const kmMatch = distanceText.match(/([\d.]+)\s*km/);
                 
@@ -85,7 +85,8 @@ export async function POST(request: NextRequest) {
           return {
             memberId,
             date: targetDate,
-            km: kmForDate
+            km: kmForDate,
+            originalKm: kmForDate
           };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -93,11 +94,39 @@ export async function POST(request: NextRequest) {
           return {
             memberId,
             date: targetDate,
-            km: 0
+            km: 0,
+            originalKm: 0
           };
         }
       })
     );
+
+    // Fetch adjustments for this date
+    try {
+      const adjustmentsResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/km-adjustments?date=${targetDate}`,
+        { cache: 'no-store' }
+      );
+      
+      if (adjustmentsResponse.ok) {
+        const adjustments = await adjustmentsResponse.json();
+        
+        // Apply adjustments
+        results.forEach(result => {
+          const adjustment = adjustments.find(
+            (adj: any) => adj.bibNumber === result.memberId
+          );
+          
+          if (adjustment) {
+            result.adjustmentKm = adjustment.adjustmentKm;
+            result.km = Math.max(0, result.originalKm! + adjustment.adjustmentKm);
+            console.log(`Applied adjustment to member ${result.memberId}: ${adjustment.adjustmentKm} km`);
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching adjustments:', error);
+    }
 
     // Sort by km descending
     results.sort((a, b) => b.km - a.km);
