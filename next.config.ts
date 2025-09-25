@@ -10,7 +10,6 @@ const nextConfig = {
       },
     ],
   },
-  // Fix CORS issue in development
   allowedDevOrigins: ['http://127.0.2.2'],
 }
 

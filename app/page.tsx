@@ -39,6 +39,7 @@ interface DailyMemberKm {
   teamName: string;
   date: string;
   km: number;
+  violationKm?: number;
 }
 
 interface RaceInfo {
@@ -54,11 +55,20 @@ interface RaceInfo {
   total_regiter?: number;
 }
 
+interface UserData {
+  stt: number;
+  name: string;
+  gender: string;
+  member_id: string;
+  strava_id: string;
+}
+
 export default function App() {
   const [personalData, setPersonalData] = useState<Member[]>([]);
   const [teamData, setTeamData] = useState<Team[]>([]);
   const [dailyRankings, setDailyRankings] = useState<DailyMemberKm[]>([]);
   const [raceInfo, setRaceInfo] = useState<RaceInfo | null>(null);
+  const [userData, setUserData] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [dailyLoading, setDailyLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'personal' | 'team' | 'daily'>('personal');
@@ -166,6 +176,83 @@ export default function App() {
       height: 50px;
       background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.9));
     }
+
+    /* Mobile responsive table */
+    @media (max-width: 768px) {
+      .mobile-table {
+        display: block;
+      }
+      .mobile-table thead {
+        display: none;
+      }
+      .mobile-table tbody {
+        display: block;
+      }
+      .mobile-table tr {
+        display: block;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 0.75rem;
+        background: rgba(255,255,255,0.05);
+        backdrop-filter: blur(8px);
+      }
+      .mobile-table td {
+        display: block;
+        text-align: left !important;
+        padding: 0.25rem 0;
+        border: none;
+      }
+      .mobile-table td:before {
+        content: attr(data-label) ": ";
+        font-weight: bold;
+        color: #fbbf24;
+        display: inline-block;
+        width: 80px;
+        font-size: 0.75rem;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .mobile-hidden { display: none !important; }
+      .mobile-full { width: 100% !important; }
+      .mobile-text-sm { font-size: 0.875rem !important; }
+      .mobile-p-2 { padding: 0.5rem !important; }
+      .mobile-gap-2 { gap: 0.5rem !important; }
+      .mobile-px-2 { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+      .mobile-py-1 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+      .mobile-text-xs { font-size: 0.75rem !important; }
+      .mobile-mb-2 { margin-bottom: 0.5rem !important; }
+      .mobile-mt-2 { margin-top: 0.5rem !important; }
+      .mobile-rounded { border-radius: 0.5rem !important; }
+      .mobile-shadow { box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important; }
+    }
+
+    /* Improved mobile spacing and layout */
+    @media (max-width: 640px) {
+      .container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+      }
+      
+      .mobile-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+      }
+      
+      .mobile-flex-col {
+        flex-direction: column !important;
+      }
+      
+      .mobile-items-start {
+        align-items: flex-start !important;
+      }
+      
+      .mobile-w-full {
+        width: 100% !important;
+      }
+    }
   `;
 
   const Confetti = () => {
@@ -206,6 +293,11 @@ export default function App() {
       default:
         return { bg: 'bg-gray-600', text: 'text-orange-400 font-medium', icon: '', glow: '' };
     }
+  };
+
+  // Helper function to get user data by member_id
+  const getUserData = (memberId: number | string) => {
+    return userData.find(user => user.member_id === String(memberId));
   };
 
   // Sort teams based on selected criteria
@@ -263,6 +355,11 @@ export default function App() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // Load user data
+        const userResponse = await fetch('/user.json');
+        const userJson = await userResponse.json();
+        setUserData(userJson);
+
         const personalRes = await fetch('/api/race/personal/1');
         const personalJson = await personalRes.json();
         const personalMembers = personalJson.data?.members || [];
@@ -308,63 +405,64 @@ export default function App() {
   const isTeam = activeTab === 'team';
   const isDaily = activeTab === 'daily';
 
-  // Personal podium component
+  // Personal podium component (responsive)
   const PersonalPodium = () => {
     if (personalData.length < 3) return null;
     const top3 = personalData.slice(0, 3);
 
     return (
-      <div className="hidden lg:block mb-8">
-        <div className="flex justify-center items-end gap-6 h-96">
+      <div className="hidden md:block mb-8">
+        <div className="flex justify-center items-end gap-4 md:gap-6 h-80 md:h-96">
+          {/* Podium layout remains the same but with responsive gaps */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
-              <Image width={40} height={40} src={top3[1].avatar} alt="2nd" className="h-20 w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={handleImageError} />
-              <div className="absolute -top-2 -right-2 text-3xl">🥈</div>
+              <Image width={40} height={40} src={top3[1].avatar} alt="2nd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={handleImageError} />
+              <div className="absolute -top-2 -right-2 text-2xl md:text-3xl">🥈</div>
             </div>
-            <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-6 text-center h-40 w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
-              <div className="font-bold text-white text-lg truncate mb-2">{top3[1].full_name}</div>
-              <div className="text-sm text-gray-200 font-semibold">{parseFloat(top3[1].final_value).toFixed(2)} km</div>
-              <div className="text-xs text-gray-300 mt-1">{top3[1].team_name}</div>
+            <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-4 md:p-6 text-center h-32 md:h-40 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
+              <div className="font-bold text-white text-sm md:text-lg truncate mb-2">{top3[1].full_name}</div>
+              <div className="text-xs md:text-sm text-gray-200 font-semibold">{parseFloat(top3[1].final_value).toFixed(2)} km</div>
+              <div className="text-xs text-gray-300 mt-1 truncate">{top3[1].team_name}</div>
             </div>
-            <div className="bg-gradient-to-b from-gray-300 to-gray-500 w-full h-28 rounded-b-2xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-3xl">2</span>
+            <div className="bg-gradient-to-b from-gray-300 to-gray-500 w-full h-24 md:h-28 rounded-b-2xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-2xl md:text-3xl">2</span>
             </div>
           </div>
 
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
             <div className="relative mb-4 animate-float">
               <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
-                <Image width={40} height={40} src={top3[0].avatar} alt="1st" className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={handleImageError} />
+                <Image width={40} height={40} src={top3[0].avatar} alt="1st" className="h-20 w-20 md:h-24 md:w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={handleImageError} />
               </div>
-              <div className="absolute -top-3 -right-3 text-4xl animate-bounce">👑</div>
+              <div className="absolute -top-3 -right-3 text-3xl md:text-4xl animate-bounce">👑</div>
             </div>
-            <div className="backdrop-blur-md bg-gradient-to-br from-yellow-400/30 via-orange-400/30 to-yellow-400/30 rounded-2xl p-6 text-center h-48 w-56 flex flex-col justify-center shadow-2xl border-2 border-yellow-300/40 relative overflow-hidden">
+            <div className="backdrop-blur-md bg-gradient-to-br from-yellow-400/30 via-orange-400/30 to-yellow-400/30 rounded-2xl p-4 md:p-6 text-center h-40 md:h-48 w-48 md:w-56 flex flex-col justify-center shadow-2xl border-2 border-yellow-300/40 relative overflow-hidden">
               <div className="absolute inset-0 animate-shimmer"></div>
               <div className="relative z-10">
-                <div className="text-2xl mb-2">🏆 CHAMPION</div>
-                <div className="font-bold text-white text-xl truncate mb-2">{top3[0].full_name}</div>
-                <div className="text-sm text-yellow-100 font-semibold">{parseFloat(top3[0].final_value).toFixed(2)} km</div>
-                <div className="text-xs text-yellow-200 mt-1">{top3[0].team_name}</div>
+                <div className="text-lg md:text-2xl mb-2">🏆 CHAMPION</div>
+                <div className="font-bold text-white text-base md:text-xl truncate mb-2">{top3[0].full_name}</div>
+                <div className="text-xs md:text-sm text-yellow-100 font-semibold">{parseFloat(top3[0].final_value).toFixed(2)} km</div>
+                <div className="text-xs text-yellow-200 mt-1 truncate">{top3[0].team_name}</div>
               </div>
             </div>
-            <div className="bg-gradient-to-b from-yellow-400 via-yellow-500 to-yellow-600 w-full h-40 rounded-b-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
+            <div className="bg-gradient-to-b from-yellow-400 via-yellow-500 to-yellow-600 w-full h-32 md:h-40 rounded-b-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
               <div className="absolute inset-0 animate-shimmer"></div>
-              <span className="text-white font-bold text-4xl relative z-10">1</span>
+              <span className="text-white font-bold text-3xl md:text-4xl relative z-10">1</span>
             </div>
           </div>
 
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
-              <Image width={40} height={40} src={top3[2].avatar} alt="3rd" className="h-20 w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={handleImageError} />
-              <div className="absolute -top-2 -right-2 text-3xl">🥉</div>
+              <Image width={40} height={40} src={top3[2].avatar} alt="3rd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={handleImageError} />
+              <div className="absolute -top-2 -right-2 text-2xl md:text-3xl">🥉</div>
             </div>
-            <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-6 text-center h-36 w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
-              <div className="font-bold text-white text-lg truncate mb-2">{top3[2].full_name}</div>
-              <div className="text-sm text-amber-200 font-semibold">{parseFloat(top3[2].final_value).toFixed(2)} km</div>
-              <div className="text-xs text-amber-300 mt-1">{top3[2].team_name}</div>
+            <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-4 md:p-6 text-center h-28 md:h-36 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
+              <div className="font-bold text-white text-sm md:text-lg truncate mb-2">{top3[2].full_name}</div>
+              <div className="text-xs md:text-sm text-amber-200 font-semibold">{parseFloat(top3[2].final_value).toFixed(2)} km</div>
+              <div className="text-xs text-amber-300 mt-1 truncate">{top3[2].team_name}</div>
             </div>
-            <div className="bg-gradient-to-b from-amber-600 to-amber-800 w-full h-24 rounded-b-2xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-3xl">3</span>
+            <div className="bg-gradient-to-b from-amber-600 to-amber-800 w-full h-20 md:h-24 rounded-b-2xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-2xl md:text-3xl">3</span>
             </div>
           </div>
         </div>
@@ -372,90 +470,121 @@ export default function App() {
     );
   };
 
-  // Team podium component
   const TeamPodium = () => {
     const sortedTeams = getSortedTeams();
     if (sortedTeams.length < 3) return null;
     const top3 = sortedTeams.slice(0, 3);
 
     return (
-      <div className="hidden lg:block mb-8">
-        <div className="text-center mb-6">
-          <h3 className="text-xl font-bold text-orange-400">
-            Top 3 theo {teamSortBy === 'total' ? 'Tổng KM' : 'KM Trung Bình'}
+      <div className="mb-6 md:mb-8">
+        <div className="text-center mb-4 md:mb-6">
+          <h3 className="text-sm md:text-lg lg:text-xl font-bold text-orange-400">
+            🏆 Top 3 theo {teamSortBy === 'total' ? 'Tổng KM' : 'KM Trung Bình'}
           </h3>
         </div>
-        <div className="flex justify-center items-end gap-6 h-96">
+        
+        {/* Mobile Podium */}
+        <div className="block md:hidden space-y-3">
+          {top3.map((team, index) => {
+            const rank = index + 1;
+            const rankStyle = getRankStyling(rank);
+            return (
+              <div key={team.id} className="backdrop-blur-md bg-white/10 rounded-xl p-4 border border-white/20">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-full ${rankStyle.bg} ${rankStyle.text} flex items-center justify-center`}>
+                    <span className="text-lg font-bold">{rankStyle.icon} {rank}</span>
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-bold text-white text-sm truncate">{team.name}</div>
+                    <div className="text-xs text-gray-300">{team.total} thành viên</div>
+                    <div className="text-orange-400 text-sm font-semibold">
+                      {teamSortBy === 'total' 
+                        ? `${parseFloat(team.total_distance).toFixed(2)} km` 
+                        : `${parseFloat(team.avg_distance).toFixed(2)} km TB`
+                      }
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Desktop Podium */}
+        <div className="hidden md:flex justify-center items-end gap-4 md:gap-6 h-80 md:h-96">
+          {/* 2nd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
-              <div className="h-20 w-20 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center border-4 border-gray-300 shadow-xl">
-                <span className="text-3xl">👥</span>
+              <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center border-4 border-white shadow-xl">
+                <span className="text-xl md:text-2xl">👥</span>
               </div>
-              <div className="absolute -top-2 -right-2 text-3xl">🥈</div>
+              <div className="absolute -top-2 -right-2 text-2xl md:text-3xl">🥈</div>
             </div>
-            <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-6 text-center h-40 w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
-              <div className="font-bold text-white text-lg truncate mb-2">{top3[1].name}</div>
-              <div className="text-sm text-gray-200 font-semibold">
+            <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-4 md:p-6 text-center h-32 md:h-40 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
+              <div className="font-bold text-white text-sm md:text-lg truncate mb-2">{top3[1].name}</div>
+              <div className="text-xs md:text-sm text-gray-200 font-semibold">
                 {teamSortBy === 'total' 
-                  ? `${parseFloat(top3[1].total_distance).toFixed(2)} km`
+                  ? `${parseFloat(top3[1].total_distance).toFixed(2)} km` 
                   : `${parseFloat(top3[1].avg_distance).toFixed(2)} km TB`
                 }
               </div>
               <div className="text-xs text-gray-300 mt-1">{top3[1].total} thành viên</div>
             </div>
-            <div className="bg-gradient-to-b from-gray-300 to-gray-500 w-full h-28 rounded-b-2xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-3xl">2</span>
+            <div className="bg-gradient-to-b from-gray-300 to-gray-500 w-full h-24 md:h-28 rounded-b-2xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-2xl md:text-3xl">2</span>
             </div>
           </div>
 
+          {/* 1st Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
             <div className="relative mb-4 animate-float">
               <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
-                <div className="h-24 w-24 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center border-4 border-white shadow-2xl">
-                  <span className="text-4xl">👥</span>
+                <div className="h-20 w-20 md:h-24 md:w-24 rounded-full bg-gradient-to-br from-yellow-400 to-orange-400 flex items-center justify-center border-4 border-white shadow-2xl">
+                  <span className="text-2xl md:text-3xl">👥</span>
                 </div>
               </div>
-              <div className="absolute -top-3 -right-3 text-4xl animate-bounce">👑</div>
+              <div className="absolute -top-3 -right-3 text-3xl md:text-4xl animate-bounce">👑</div>
             </div>
-            <div className="backdrop-blur-md bg-gradient-to-br from-yellow-400/30 via-orange-400/30 to-yellow-400/30 rounded-2xl p-6 text-center h-48 w-56 flex flex-col justify-center shadow-2xl border-2 border-yellow-300/40 relative overflow-hidden">
+            <div className="backdrop-blur-md bg-gradient-to-br from-yellow-400/30 via-orange-400/30 to-yellow-400/30 rounded-2xl p-4 md:p-6 text-center h-40 md:h-48 w-48 md:w-56 flex flex-col justify-center shadow-2xl border-2 border-yellow-300/40 relative overflow-hidden">
               <div className="absolute inset-0 animate-shimmer"></div>
               <div className="relative z-10">
-                <div className="text-2xl mb-2">🏆 TOP TEAM</div>
-                <div className="font-bold text-white text-xl truncate mb-2">{top3[0].name}</div>
-                <div className="text-sm text-yellow-100 font-semibold">
+                <div className="text-lg md:text-2xl mb-2">🏆 CHAMPION TEAM</div>
+                <div className="font-bold text-white text-base md:text-xl truncate mb-2">{top3[0].name}</div>
+                <div className="text-xs md:text-sm text-yellow-100 font-semibold">
                   {teamSortBy === 'total' 
-                    ? `${parseFloat(top3[0].total_distance).toFixed(2)} km`
+                    ? `${parseFloat(top3[0].total_distance).toFixed(2)} km` 
                     : `${parseFloat(top3[0].avg_distance).toFixed(2)} km TB`
                   }
                 </div>
                 <div className="text-xs text-yellow-200 mt-1">{top3[0].total} thành viên</div>
               </div>
             </div>
-            <div className="bg-gradient-to-b from-yellow-400 via-yellow-500 to-yellow-600 w-full h-40 rounded-b-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
+            <div className="bg-gradient-to-b from-yellow-400 via-yellow-500 to-yellow-600 w-full h-32 md:h-40 rounded-b-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
               <div className="absolute inset-0 animate-shimmer"></div>
-              <span className="text-white font-bold text-4xl relative z-10">1</span>
+              <span className="text-white font-bold text-3xl md:text-4xl relative z-10">1</span>
             </div>
           </div>
 
+          {/* 3rd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
-              <div className="h-20 w-20 rounded-full bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center border-4 border-amber-600 shadow-xl">
-                <span className="text-3xl">👥</span>
+              <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center border-4 border-white shadow-xl">
+                <span className="text-xl md:text-2xl">👥</span>
               </div>
-              <div className="absolute -top-2 -right-2 text-3xl">🥉</div>
+              <div className="absolute -top-2 -right-2 text-2xl md:text-3xl">🥉</div>
             </div>
-            <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-6 text-center h-36 w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
-              <div className="font-bold text-white text-lg truncate mb-2">{top3[2].name}</div>
-              <div className="text-sm text-amber-200 font-semibold">
+            <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-4 md:p-6 text-center h-28 md:h-36 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
+              <div className="font-bold text-white text-sm md:text-lg truncate mb-2">{top3[2].name}</div>
+              <div className="text-xs md:text-sm text-amber-200 font-semibold">
                 {teamSortBy === 'total' 
-                  ? `${parseFloat(top3[2].total_distance).toFixed(2)} km`
+                  ? `${parseFloat(top3[2].total_distance).toFixed(2)} km` 
                   : `${parseFloat(top3[2].avg_distance).toFixed(2)} km TB`
                 }
               </div>
               <div className="text-xs text-amber-300 mt-1">{top3[2].total} thành viên</div>
             </div>
-            <div className="bg-gradient-to-b from-amber-600 to-amber-800 w-full h-24 rounded-b-2xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-3xl">3</span>
+            <div className="bg-gradient-to-b from-amber-600 to-amber-800 w-full h-20 md:h-24 rounded-b-2xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-2xl md:text-3xl">3</span>
             </div>
           </div>
         </div>
@@ -463,62 +592,97 @@ export default function App() {
     );
   };
 
-  // Daily podium component
   const DailyPodium = () => {
     if (dailyRankings.length < 3) return null;
+    const top3 = dailyRankings.slice(0, 3);
 
     return (
-      <div className="hidden lg:block mb-8">
-        <div className="flex justify-center items-end gap-6 h-96">
+      <div className="mb-6 md:mb-8">
+        <div className="text-center mb-4 md:mb-6">
+          <h3 className="text-sm md:text-lg lg:text-xl font-bold text-orange-400">
+            🏆 Top 3 ngày {formatDate(selectedDate)}
+          </h3>
+        </div>
+        
+        {/* Mobile Podium */}
+        <div className="block md:hidden space-y-3">
+          {top3.map((record, index) => {
+            const rank = index + 1;
+            const rankStyle = getRankStyling(rank);
+            return (
+              <div key={`${record.memberId}-${index}`} className="backdrop-blur-md bg-white/10 rounded-xl p-4 border border-white/20">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-full ${rankStyle.bg} ${rankStyle.text} flex items-center justify-center`}>
+                    <span className="text-lg font-bold">{rankStyle.icon} {rank}</span>
+                  </div>
+                  <div className="flex items-center flex-1">
+                    <Image width={40} height={40} src={record.avatar} alt={record.memberName} className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20" onError={handleImageError} />
+                    <div className="flex-1">
+                      <div className="font-bold text-white text-sm truncate">{record.memberName}</div>
+                      <div className="text-xs text-gray-300">{record.teamName}</div>
+                      <div className="text-orange-400 text-sm font-semibold">{record.km.toFixed(2)} km</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Desktop Podium */}
+        <div className="hidden md:flex justify-center items-end gap-4 md:gap-6 h-80 md:h-96">
+          {/* 2nd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
-              <Image width={40} height={40} src={dailyRankings[1].avatar} alt="2nd" className="h-20 w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={handleImageError} />
-              <div className="absolute -top-2 -right-2 text-3xl">🥈</div>
+              <Image width={64} height={64} src={top3[1].avatar} alt="2nd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={handleImageError} />
+              <div className="absolute -top-2 -right-2 text-2xl md:text-3xl">🥈</div>
             </div>
-            <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-6 text-center h-40 w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
-              <div className="font-bold text-white text-lg truncate mb-2">{dailyRankings[1].memberName}</div>
-              <div className="text-sm text-gray-200 font-semibold">{dailyRankings[1].km.toFixed(2)} km</div>
-              <div className="text-xs text-gray-300 mt-1">{formatDate(dailyRankings[1].date)}</div>
+            <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-4 md:p-6 text-center h-32 md:h-40 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
+              <div className="font-bold text-white text-sm md:text-lg truncate mb-2">{top3[1].memberName}</div>
+              <div className="text-xs md:text-sm text-gray-200 font-semibold">{top3[1].km.toFixed(2)} km</div>
+              <div className="text-xs text-gray-300 mt-1 truncate">{top3[1].teamName}</div>
             </div>
-            <div className="bg-gradient-to-b from-gray-300 to-gray-500 w-full h-28 rounded-b-2xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-3xl">2</span>
+            <div className="bg-gradient-to-b from-gray-300 to-gray-500 w-full h-24 md:h-28 rounded-b-2xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-2xl md:text-3xl">2</span>
             </div>
           </div>
 
+          {/* 1st Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
             <div className="relative mb-4 animate-float">
               <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
-                <Image width={40} height={40} src={dailyRankings[0].avatar} alt="1st" className="h-24 w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={handleImageError} />
+                <Image width={80} height={80} src={top3[0].avatar} alt="1st" className="h-20 w-20 md:h-24 md:w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={handleImageError} />
               </div>
-              <div className="absolute -top-3 -right-3 text-4xl animate-bounce">👑</div>
+              <div className="absolute -top-3 -right-3 text-3xl md:text-4xl animate-bounce">👑</div>
             </div>
-            <div className="backdrop-blur-md bg-gradient-to-br from-yellow-400/30 via-orange-400/30 to-yellow-400/30 rounded-2xl p-6 text-center h-48 w-56 flex flex-col justify-center shadow-2xl border-2 border-yellow-300/40 relative overflow-hidden">
+            <div className="backdrop-blur-md bg-gradient-to-br from-yellow-400/30 via-orange-400/30 to-yellow-400/30 rounded-2xl p-4 md:p-6 text-center h-40 md:h-48 w-48 md:w-56 flex flex-col justify-center shadow-2xl border-2 border-yellow-300/40 relative overflow-hidden">
               <div className="absolute inset-0 animate-shimmer"></div>
               <div className="relative z-10">
-                <div className="text-2xl mb-2">🏆 TOP 1</div>
-                <div className="font-bold text-white text-xl truncate mb-2">{dailyRankings[0].memberName}</div>
-                <div className="text-sm text-yellow-100 font-semibold">{dailyRankings[0].km.toFixed(2)} km</div>
-                <div className="text-xs text-yellow-200 mt-1">{formatDate(dailyRankings[0].date)}</div>
+                <div className="text-lg md:text-2xl mb-2">🏆 DAILY CHAMPION</div>
+                <div className="font-bold text-white text-base md:text-xl truncate mb-2">{top3[0].memberName}</div>
+                <div className="text-xs md:text-sm text-yellow-100 font-semibold">{top3[0].km.toFixed(2)} km</div>
+                <div className="text-xs text-yellow-200 mt-1 truncate">{top3[0].teamName}</div>
               </div>
             </div>
-            <div className="bg-gradient-to-b from-yellow-400 via-yellow-500 to-yellow-600 w-full h-40 rounded-b-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
+            <div className="bg-gradient-to-b from-yellow-400 via-yellow-500 to-yellow-600 w-full h-32 md:h-40 rounded-b-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
               <div className="absolute inset-0 animate-shimmer"></div>
-              <span className="text-white font-bold text-4xl relative z-10">1</span>
+              <span className="text-white font-bold text-3xl md:text-4xl relative z-10">1</span>
             </div>
           </div>
 
+          {/* 3rd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
-              <Image width={40} height={40} src={dailyRankings[2].avatar} alt="3rd" className="h-20 w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={handleImageError} />
-              <div className="absolute -top-2 -right-2 text-3xl">🥉</div>
+              <Image width={64} height={64} src={top3[2].avatar} alt="3rd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={handleImageError} />
+              <div className="absolute -top-2 -right-2 text-2xl md:text-3xl">🥉</div>
             </div>
-            <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-6 text-center h-36 w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
-              <div className="font-bold text-white text-lg truncate mb-2">{dailyRankings[2].memberName}</div>
-              <div className="text-sm text-amber-200 font-semibold">{dailyRankings[2].km.toFixed(2)} km</div>
-              <div className="text-xs text-amber-300 mt-1">{formatDate(dailyRankings[2].date)}</div>
+            <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-4 md:p-6 text-center h-28 md:h-36 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
+              <div className="font-bold text-white text-sm md:text-lg truncate mb-2">{top3[2].memberName}</div>
+              <div className="text-xs md:text-sm text-amber-200 font-semibold">{top3[2].km.toFixed(2)} km</div>
+              <div className="text-xs text-amber-300 mt-1 truncate">{top3[2].teamName}</div>
             </div>
-            <div className="bg-gradient-to-b from-amber-600 to-amber-800 w-full h-24 rounded-b-2xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-3xl">3</span>
+            <div className="bg-gradient-to-b from-amber-600 to-amber-800 w-full h-20 md:h-24 rounded-b-2xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-2xl md:text-3xl">3</span>
             </div>
           </div>
         </div>
@@ -543,41 +707,41 @@ export default function App() {
             <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black"></div>
           </div>
 
-          <div className="relative container mx-auto px-4 py-12 md:py-20">
+          <div className="relative container mx-auto px-3 md:px-4 py-6 md:py-8 lg:py-20">
             <div className="max-w-6xl mx-auto">
-              <div className="animate-slide-in mb-6">
-                <span className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500/20 backdrop-blur-sm border border-orange-500/30 rounded-full text-orange-300 text-sm font-semibold">
-                  <span className="text-lg">🏃</span>
+              <div className="animate-slide-in mb-4 md:mb-6">
+                <span className="inline-flex items-center gap-2 px-3 py-2 md:px-4 md:py-2 bg-orange-500/20 backdrop-blur-sm border border-orange-500/30 rounded-full text-orange-300 text-xs md:text-sm font-semibold">
+                  <span className="text-sm md:text-base lg:text-lg">🏃</span>
                   META RUNNING CHALLENGE
                 </span>
               </div>
 
-              <h1 className="text-3xl md:text-5xl lg:text-6xl font-black text-white mb-6 text-shadow-lg animate-fade-in-up gradient-text">
+              <h1 className="text-2xl md:text-4xl lg:text-6xl font-black text-white mb-4 md:mb-6 text-shadow-lg animate-fade-in-up">
                 {raceInfo?.meta_title || raceInfo?.title || 'META RUN 2025'}
               </h1>
 
               {raceInfo?.content && (
                 <div className="animate-fade-in-up mb-4">
                   <div 
-                    className={`text-base md:text-lg text-gray-300 max-w-4xl content-html ${!isDescriptionExpanded ? 'description-collapsed' : ''}`}
+                    className={`text-sm md:text-base lg:text-lg text-gray-300 max-w-4xl content-html ${!isDescriptionExpanded ? 'description-collapsed' : ''}`}
                     dangerouslySetInnerHTML={{ __html: raceInfo.content }}
                   />
                   <button
                     onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-                    className="mt-2 px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 rounded-lg text-orange-300 text-sm font-semibold transition-all"
+                    className="mt-2 px-3 py-1 md:px-4 md:py-2 bg-orange-500/20 hover:bg-orange-500/30 rounded-lg text-orange-300 text-xs md:text-sm font-semibold transition-all"
                   >
                     {isDescriptionExpanded ? '▲ Thu gọn' : '▼ Hiển thị thêm'}
                   </button>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 animate-fade-in-up">
-                <div className="backdrop-blur-xl bg-white/10 rounded-xl p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 transform hover:scale-105">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8 animate-fade-in-up mobile-grid">
+                <div className="backdrop-blur-xl bg-white/10 rounded-xl p-3 md:p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 transform hover:scale-105 mobile-shadow">
                   <div className="flex items-center gap-3">
-                    <div className="text-3xl">📅</div>
+                    <div className="text-xl md:text-2xl lg:text-3xl">📅</div>
                     <div>
                       <div className="text-xs text-gray-400 mb-1">Thời gian thi đấu</div>
-                      <div className="font-bold text-white">
+                      <div className="font-bold text-white text-xs md:text-sm">
                         {raceInfo?.start_time && raceInfo?.finish_time ? (
                           <>
                             {formatDate(raceInfo.start_time)} - {formatDate(raceInfo.finish_time)}
@@ -590,24 +754,24 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="backdrop-blur-xl bg-white/10 rounded-xl p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 transform hover:scale-105">
+                <div className="backdrop-blur-xl bg-white/10 rounded-xl p-3 md:p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 transform hover:scale-105 mobile-shadow">
                   <div className="flex items-center gap-3">
-                    <div className="text-3xl">🎯</div>
+                    <div className="text-xl md:text-2xl lg:text-3xl">🎯</div>
                     <div>
                       <div className="text-xs text-gray-400 mb-1">Tổng quãng đường</div>
-                      <div className="font-bold text-white">
+                      <div className="font-bold text-white text-xs md:text-sm">
                         {countTotalDistance.toFixed(2)} km
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="backdrop-blur-xl bg-white/10 rounded-xl p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 transform hover:scale-105">
+                <div className="backdrop-blur-xl bg-white/10 rounded-xl p-3 md:p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 transform hover:scale-105 mobile-shadow">
                   <div className="flex items-center gap-3">
-                    <div className="text-3xl">👥</div>
+                    <div className="text-xl md:text-2xl lg:text-3xl">👥</div>
                     <div>
                       <div className="text-xs text-gray-400 mb-1">Vận động viên</div>
-                      <div className="font-bold text-white">
+                      <div className="font-bold text-white text-xs md:text-sm">
                         {personalData.length} người
                       </div>
                     </div>
@@ -618,245 +782,330 @@ export default function App() {
           </div>
 
           <div className="absolute bottom-0 left-0 right-0">
-            <svg className="w-full h-16 fill-current text-gray-900" viewBox="0 0 1200 120" preserveAspectRatio="none">
+            <svg className="w-full h-8 md:h-16 fill-current text-gray-900" viewBox="0 0 1200 120" preserveAspectRatio="none">
               <path d="M0,0 C150,100 350,0 600,50 C850,100 1050,0 1200,50 L1200,120 L0,120 Z"></path>
             </svg>
           </div>
         </div>
 
-        <div className="container mx-auto px-4 py-8 max-w-6xl">
-          <div className="flex flex-col lg:flex-row justify-between items-center mb-8 gap-6 backdrop-blur-md bg-white/10 rounded-2xl p-6 border border-white/20 shadow-xl">
-            <div className="flex items-center gap-4">
-              <div className="text-2xl">
+        <div className="container mx-auto px-3 md:px-4 py-4 md:py-8 max-w-7xl">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 md:mb-6 lg:mb-8 gap-3 md:gap-4 lg:gap-6 backdrop-blur-md bg-white/10 rounded-xl md:rounded-2xl p-4 md:p-6 border border-white/20 shadow-xl mobile-flex-col mobile-items-start">
+            <div className="flex items-center gap-3 md:gap-4">
+              <div className="text-xl md:text-2xl">
                 {isPersonal ? '👤' : isTeam ? '👥' : '📅'}
               </div>
-              <h2 className="text-2xl font-bold text-white">
+              <h2 className="text-lg md:text-2xl font-bold text-white">
                 {isPersonal ? 'Personal Rankings' : isTeam ? 'Team Rankings' : 'Daily Rankings'}
               </h2>
             </div>
 
             {isDaily && (
-              <div className="flex items-center gap-4">
-                <label className="text-sm font-medium text-white">Chọn ngày:</label>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-4 mobile-w-full">
+                <label className="text-xs md:text-sm font-medium text-white whitespace-nowrap">Chọn ngày:</label>
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={handleDateChange}
-                  className="px-4 py-2 rounded-xl bg-white/10 border border-white/20 text-white backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  className="px-3 py-2 md:px-4 md:py-2 rounded-lg md:rounded-xl bg-white/10 border border-white/20 text-white text-sm backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-orange-400 mobile-w-full"
                   max={new Date().toISOString().split('T')[0]}
                 />
               </div>
             )}
           </div>
 
-          <div className="flex justify-center mb-8">
-            <div className="backdrop-blur-md bg-white/10 rounded-2xl p-2 border border-white/20 shadow-lg">
-              <button onClick={() => setActiveTab('personal')} className={`py-3 px-8 font-bold rounded-xl transition-all duration-200 ${activeTab === 'personal' ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}>
-                👤 Personal
-              </button>
-              <button onClick={() => setActiveTab('team')} className={`py-3 px-8 font-bold rounded-xl transition-all duration-200 ${activeTab === 'team' ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}>
-                👥 Team
-              </button>
-              <button onClick={() => setActiveTab('daily')} className={`py-3 px-8 font-bold rounded-xl transition-all duration-200 ${activeTab === 'daily' ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}>
-                📅 Daily
-              </button>
+          <div className="flex justify-center mb-4 md:mb-6 lg:mb-8">
+            <div className="backdrop-blur-md bg-white/10 rounded-xl md:rounded-2xl p-1 md:p-2 border border-white/20 shadow-lg w-full max-w-md md:max-w-none md:w-auto">
+              <div className="flex flex-col sm:flex-row gap-1">
+                <button 
+                  onClick={() => setActiveTab('personal')} 
+                  className={`py-2 px-3 md:py-3 md:px-8 font-bold rounded-lg md:rounded-xl transition-all duration-200 text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 flex-1 sm:flex-initial ${activeTab === 'personal' ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
+                >
+                  <span>👤</span> Personal
+                </button>
+                <button 
+                  onClick={() => setActiveTab('team')} 
+                  className={`py-2 px-3 md:py-3 md:px-8 font-bold rounded-lg md:rounded-xl transition-all duration-200 text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 flex-1 sm:flex-initial ${activeTab === 'team' ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
+                >
+                  <span>👥</span> Team
+                </button>
+                <button 
+                  onClick={() => setActiveTab('daily')} 
+                  className={`py-2 px-3 md:py-3 md:px-8 font-bold rounded-lg md:rounded-xl transition-all duration-200 text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 flex-1 sm:flex-initial ${activeTab === 'daily' ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
+                >
+                  <span>📅</span> Daily
+                </button>
+              </div>
             </div>
           </div>
 
           {loading && (
-            <div className="flex flex-col items-center justify-center py-20">
-              <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-400 border-t-orange-400"></div>
-              <div className="mt-4 text-white font-medium">Loading race data...</div>
+            <div className="flex flex-col items-center justify-center py-16 md:py-20">
+              <div className="animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-4 border-gray-400 border-t-orange-400"></div>
+              <div className="mt-4 text-white font-medium text-sm md:text-base">Loading race data...</div>
             </div>
           )}
 
           {!loading && isPersonal && (
-            <div className="space-y-6 pt-20">
+            <div className="space-y-4 md:space-y-6 pt-8 md:pt-20">
               <PersonalPodium />
-              <div className="overflow-hidden rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
-                <table className="w-full">
-                  <thead className="backdrop-blur-sm bg-white/20">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-white">🏅 Hạng</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-white">👤 Tên</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-white">🏃‍♂️ Quãng đường</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-white">📊 Trạng thái</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-white">Team</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10">
-                    {personalData.map((member, index) => {
-                      const rank = member.order;
-                      const rankStyle = getRankStyling(rank);
-                      const totalKm = parseFloat(member.final_value || '0');
-                      const percentage = parseFloat(member.percent_finish || '0');
-
-                      return (
-                        <tr key={member.id || index} className={`hover:bg-white/5 transition-colors duration-200 ${rank <= 3 ? 'bg-white/5' : ''}`}>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full ${rankStyle.bg} ${rankStyle.text} shadow-lg`}>
-                              <span className="text-sm font-bold">{rankStyle.icon} {rank}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <Image width={40}  height={40} src={member.avatar || '/meta.png'} alt="Avatar" className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20 shadow-md" onError={handleImageError} />
-                              <div>
-                                <div className="text-sm font-semibold text-white">{member.full_name}</div>
-                                <div className="text-xs text-gray-300">BIB: {member.bib_number || 'N/A'}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-semibold text-white">{totalKm.toFixed(2)} km</div>
-                            <div className="text-xs text-gray-400">{percentage.toFixed(1)}%</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${percentage >= 100 ? 'bg-green-500/30 text-green-200' : 'bg-orange-500/30 text-orange-200'}`}>
-                              {percentage >= 100 ? '✅ Hoàn thành' : '🏃‍♂️ Đang thi'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-300">{member.team_name || 'N/A'}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {!loading && isTeam && (
-            <div className="space-y-6 pt-20">
-              <div className="flex justify-center mb-6">
-                <div className="backdrop-blur-md bg-white/10 rounded-xl p-1 border border-white/20">
-                  <button
-                    onClick={() => setTeamSortBy('total')}
-                    className={`px-6 py-2 rounded-lg font-semibold transition-all ${teamSortBy === 'total' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:text-white'}`}
-                  >
-                    📊 Tổng KM
-                  </button>
-                  <button
-                    onClick={() => setTeamSortBy('average')}
-                    className={`px-6 py-2 rounded-lg font-semibold transition-all ${teamSortBy === 'average' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:text-white'}`}
-                  >
-                    📈 KM Trung Bình
-                  </button>
-                </div>
-              </div>
-
-              <TeamPodium />
-              <div className="overflow-hidden rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
-                <table className="w-full">
-                  <thead className="backdrop-blur-sm bg-white/20">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-white">🏅 Hạng</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-white">👥 Tên đội</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-white">👤 Thành viên</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-white">📊 TỔNG KM</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-white">📈 KM TB</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10">
-                    {getSortedTeams().map((team, index) => {
-                      const rank = index + 1;
-                      const rankStyle = getRankStyling(rank);
-
-                      return (
-                        <tr key={team.id || index} className={`hover:bg-white/5 transition-colors ${rank <= 3 ? 'bg-white/5' : ''}`}>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full ${rankStyle.bg} ${rankStyle.text} shadow-lg`}>
-                              <span className="text-sm font-bold">{rankStyle.icon} {rank}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center mr-3 border-2 border-white/20 shadow-md">
-                                <span className="text-xl">👥</span>
-                              </div>
-                              <div className="text-sm font-semibold text-white">{team.name}</div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-semibold text-white">{team.total}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-bold text-orange-400">{parseFloat(team.total_distance).toFixed(2)} km</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-semibold text-blue-400">{parseFloat(team.avg_distance).toFixed(2)} km</div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {!loading && isDaily && (
-            <div className="space-y-6 pt-20">
-              {!dailyLoading && dailyRankings.length >= 3 && <DailyPodium />}
-
-              <div className="overflow-hidden rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
-                {dailyLoading ? (
-                  <div className="flex flex-col items-center justify-center py-20">
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-400 border-t-orange-400"></div>
-                    <div className="mt-4 text-white font-medium">Đang tải dữ liệu ngày {formatDate(selectedDate)}...</div>
-                  </div>
-                ) : (
-                  <table className="w-full">
+              <div className="overflow-hidden rounded-xl md:rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full mobile-table">
                     <thead className="backdrop-blur-sm bg-white/20">
                       <tr>
-                        <th className="px-6 py-4 text-left text-sm font-bold text-white">🏅 Hạng</th>
-                        <th className="px-6 py-4 text-left text-sm font-bold text-white">👤 Vận động viên</th>
-                        <th className="px-6 py-4 text-left text-sm font-bold text-white">📅 Ngày</th>
-                        <th className="px-6 py-4 text-left text-sm font-bold text-white">🏃‍♂️ KM chạy được</th>
-                        <th className="px-6 py-4 text-left text-sm font-bold text-white">Team</th>
+                        <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">🏅 Hạng</th>
+                        <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">👤 Tên</th>
+                        <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">🏃‍♂️ Quãng đường</th>
+                        <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white mobile-hidden">📊 Trạng thái</th>
+                        <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white mobile-hidden">Team</th>
+                        <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">🔗 Links</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
-                      {dailyRankings.map((record, index) => {
-                        const rank = index + 1;
+                      {personalData.map((member, index) => {
+                        const rank = member.order;
                         const rankStyle = getRankStyling(rank);
+                        const totalKm = parseFloat(member.final_value || '0');
+                        const percentage = parseFloat(member.percent_finish || '0');
+                        const user = getUserData(member.bib_number || member.id);
 
                         return (
-                          <tr key={`${record.memberId}-${index}`} className={`hover:bg-white/5 transition-colors ${rank <= 3 ? 'bg-white/5' : ''}`}>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full ${rankStyle.bg} ${rankStyle.text} shadow-lg`}>
-                                <span className="text-sm font-bold">{rankStyle.icon} {rank}</span>
+                          <tr key={member.id || index} className={`hover:bg-white/5 transition-colors duration-200 ${rank <= 3 ? 'bg-white/5' : ''}`}>
+                            <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Hạng">
+                              <div className={`inline-flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full ${rankStyle.bg} ${rankStyle.text} shadow-lg`}>
+                                <span className="text-xs md:text-sm font-bold">{rankStyle.icon} {rank}</span>
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Tên">
                               <div className="flex items-center">
-                                <Image width={40} height={40} src={record.avatar} alt={record.memberName} className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20 shadow-md" onError={handleImageError} />
+                                <Image width={32} height={32} src={member.avatar || '/meta.png'} alt="Avatar" className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover mr-2 md:mr-3 border-2 border-white/20 shadow-md" onError={handleImageError} />
                                 <div>
-                                  <div className="text-sm font-semibold text-white">{record.memberName}</div>
-                                  <div className="text-xs text-gray-300">BIB: {record.memberId}</div>
+                                  <div className="text-xs md:text-sm font-semibold text-white truncate max-w-[120px] md:max-w-none">{member.full_name}</div>
+                                  <div className="text-xs text-gray-300">BIB: {member.bib_number || 'N/A'}</div>
+                                  <div className="md:hidden text-xs text-gray-400 mt-1">{member.team_name}</div>
                                 </div>
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-white">{formatDate(record.date)}</div>
+                            <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Quãng đường">
+                              <div className="text-xs md:text-sm font-semibold text-white">{totalKm.toFixed(2)} km</div>
+                              <div className="text-xs text-gray-400">{percentage.toFixed(1)}%</div>
+                              <div className="md:hidden mt-1">
+                                <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${percentage >= 100 ? 'bg-green-500/30 text-green-200' : 'bg-orange-500/30 text-orange-200'}`}>
+                                  {percentage >= 100 ? '✅' : '🏃‍♂️'}
+                                </span>
+                              </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-bold text-orange-400">{record.km.toFixed(2)} km</div>
+                            <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap mobile-hidden" data-label="Trạng thái">
+                              <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${percentage >= 100 ? 'bg-green-500/30 text-green-200' : 'bg-orange-500/30 text-orange-200'}`}>
+                                {percentage >= 100 ? '✅ Hoàn thành' : '🏃‍♂️ Đang thi'}
+                              </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-xs text-gray-300">{record.teamName}</div>
+                            <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap text-xs text-gray-300 mobile-hidden" data-label="Team">{member.team_name || 'N/A'}</td>
+                            <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Links">
+                              <div className="flex flex-col md:flex-row gap-1 md:gap-2">
+                                <a
+                                  href={`https://84race.com/member/${member.bib_number || member.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center px-2 py-1 bg-blue-500/20 text-blue-300 rounded-md hover:bg-blue-500/30 transition-colors text-xs"
+                                >
+                                  <span className="mr-1">🏃</span>
+                                  84Race
+                                </a>
+                                {user?.strava_id && (
+                                  <a
+                                    href={`https://www.strava.com/athletes/${user.strava_id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center px-2 py-1 bg-orange-500/20 text-orange-300 rounded-md hover:bg-orange-500/30 transition-colors text-xs"
+                                  >
+                                    <span className="mr-1">🔥</span>
+                                    Strava
+                                  </a>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!loading && isTeam && (
+            <div className="space-y-4 md:space-y-6 pt-4 md:pt-8 lg:pt-20">
+              <div className="flex justify-center mb-4 md:mb-6">
+                <div className="backdrop-blur-md bg-white/10 rounded-xl p-1 border border-white/20 w-full max-w-sm md:max-w-none md:w-auto">
+                  <div className="flex flex-col sm:flex-row gap-1">
+                    <button
+                      onClick={() => setTeamSortBy('total')}
+                      className={`px-4 py-2 md:px-6 md:py-2 rounded-lg font-semibold transition-all text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 flex-1 sm:flex-initial ${teamSortBy === 'total' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:text-white'}`}
+                    >
+                      <span>📊</span> Tổng KM
+                    </button>
+                    <button
+                      onClick={() => setTeamSortBy('average')}
+                      className={`px-4 py-2 md:px-6 md:py-2 rounded-lg font-semibold transition-all text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 flex-1 sm:flex-initial ${teamSortBy === 'average' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:text-white'}`}
+                    >
+                      <span>📈</span> KM Trung Bình
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <TeamPodium />
+              <div className="overflow-hidden rounded-xl md:rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full mobile-table">
+                    <thead className="backdrop-blur-sm bg-white/20">
+                      <tr>
+                        <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">🏅 Hạng</th>
+                        <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">👥 Tên đội</th>
+                        <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white mobile-hidden">👤 Thành viên</th>
+                        <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">📊 TỔNG KM</th>
+                        <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">📈 KM TB</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {getSortedTeams().map((team, index) => {
+                        const rank = index + 1;
+                        const rankStyle = getRankStyling(rank);
+
+                        return (
+                          <tr key={team.id || index} className={`hover:bg-white/5 transition-colors ${rank <= 3 ? 'bg-white/5' : ''}`}>
+                            <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Hạng">
+                              <div className={`inline-flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full ${rankStyle.bg} ${rankStyle.text} shadow-lg`}>
+                                <span className="text-xs md:text-sm font-bold">{rankStyle.icon} {rank}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Tên đội">
+                              <div className="flex items-center">
+                                <div className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center mr-2 md:mr-3 border-2 border-white/20 shadow-md">
+                                  <span className="text-sm md:text-xl">👥</span>
+                                </div>
+                                <div>
+                                  <div className="text-xs md:text-sm font-semibold text-white truncate max-w-[120px] md:max-w-none">{team.name}</div>
+                                  <div className="md:hidden text-xs text-white mt-1">{team.total} thành viên</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap mobile-hidden" data-label="Thành viên">
+                              <div className="text-xs md:text-sm font-semibold text-white">{team.total}</div>
+                            </td>
+                            <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Tổng KM">
+                              <div className="text-xs md:text-sm font-bold text-orange-400">{parseFloat(team.total_distance).toFixed(2)} km</div>
+                            </td>
+                            <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="KM TB">
+                              <div className="text-xs md:text-sm font-semibold text-blue-400">{parseFloat(team.avg_distance).toFixed(2)} km</div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!loading && isDaily && (
+            <div className="space-y-4 md:space-y-6 pt-8 md:pt-20">
+              {!dailyLoading && dailyRankings.length >= 3 && <DailyPodium />}
+
+              <div className="overflow-hidden rounded-xl md:rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
+                {dailyLoading ? (
+                  <div className="flex flex-col items-center justify-center py-16 md:py-20">
+                    <div className="animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-4 border-gray-400 border-t-orange-400"></div>
+                    <div className="mt-4 text-white font-medium text-sm md:text-base">Đang tải dữ liệu ngày {formatDate(selectedDate)}...</div>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full mobile-table">
+                      <thead className="backdrop-blur-sm bg-white/20">
+                        <tr>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">🏅 Hạng</th>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">👤 Vận động viên</th>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white mobile-hidden">📅 Ngày</th>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">🏃‍♂️ KM chạy được</th>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white mobile-hidden">Team</th>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">🔗 Links</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/10">
+                        {dailyRankings.map((record, index) => {
+                          const rank = index + 1;
+                          const rankStyle = getRankStyling(rank);
+                          const user = getUserData(record.memberId);
+
+                          return (
+                            <tr key={`${record.memberId}-${index}`} className={`hover:bg-white/5 transition-colors ${rank <= 3 ? 'bg-white/5' : ''}`}>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Hạng">
+                                <div className={`inline-flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full ${rankStyle.bg} ${rankStyle.text} shadow-lg`}>
+                                  <span className="text-xs md:text-sm font-bold">{rankStyle.icon} {rank}</span>
+                                </div>
+                              </td>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Vận động viên">
+                                <div className="flex items-center">
+                                  <Image width={32} height={32} src={record.avatar} alt={record.memberName} className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover mr-2 md:mr-3 border-2 border-white/20 shadow-md" onError={handleImageError} />
+                                  <div>
+                                    <div className="text-xs md:text-sm font-semibold text-white truncate max-w-[120px] md:max-w-none">{record.memberName}</div>
+                                    <div className="text-xs text-gray-300">BIB: {record.memberId}</div>
+                                    <div className="md:hidden text-xs text-gray-400 mt-1">{record.teamName}</div>
+                                    <div className="md:hidden text-xs text-white mt-1">{formatDate(record.date)}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap mobile-hidden" data-label="Ngày">
+                                <div className="text-xs md:text-sm text-white">{formatDate(record.date)}</div>
+                              </td>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="KM chạy được">
+                                <div className="text-xs md:text-sm font-bold text-orange-400">{record.km.toFixed(2)} km</div>
+                                {record.violationKm && record.violationKm > 0 && (
+                                  <div className="text-xs text-red-400 mt-1">Vi phạm: {record.violationKm.toFixed(2)} km</div>
+                                )}
+                              </td>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap mobile-hidden" data-label="Team">
+                                <div className="text-xs text-gray-300">{record.teamName}</div>
+                              </td>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Links">
+                                <div className="flex flex-col md:flex-row gap-1 md:gap-2">
+                                  <a
+                                    href={`https://84race.com/member/${record.memberId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center px-2 py-1 bg-blue-500/20 text-blue-300 rounded-md hover:bg-blue-500/30 transition-colors text-xs"
+                                  >
+                                    <span className="mr-1">🏃</span>
+                                    84Race
+                                  </a>
+                                  {user?.strava_id && (
+                                    <a
+                                      href={`https://www.strava.com/athletes/${user.strava_id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center px-2 py-1 bg-orange-500/20 text-orange-300 rounded-md hover:bg-orange-500/30 transition-colors text-xs"
+                                    >
+                                      <span className="mr-1">🔥</span>
+                                      Strava
+                                    </a>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
 
                 {!dailyLoading && dailyRankings.length === 0 && (
-                  <div className="text-center py-16">
-                    <div className="text-4xl mb-4">📅</div>
-                    <div className="text-lg text-white font-semibold">Chưa có dữ liệu cho ngày này</div>
+                  <div className="text-center py-12 md:py-16">
+                    <div className="text-3xl md:text-4xl mb-4">📅</div>
+                    <div className="text-base md:text-lg text-white font-semibold">Chưa có dữ liệu cho ngày này</div>
                     <div className="text-sm text-gray-300 mt-2">Vui lòng chọn ngày khác</div>
                   </div>
                 )}

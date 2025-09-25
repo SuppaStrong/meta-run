@@ -16,6 +16,7 @@ interface DailyKmResult {
   km: number;
   originalKm?: number;
   adjustmentKm?: number;
+  violationKm?: number; 
 }
 
 interface RequestBody {
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
           
           const $ = cheerio.load(response.data);
           let kmForDate = 0;
+          let violationKm = 0;
           
           // Parse date format: "22/09/2025 07:47:41 (GMT+7)"
           const formatDateForComparison = (dateStr: string) => {
@@ -79,20 +81,33 @@ export async function POST(request: NextRequest) {
                 
                 if (kmMatch) {
                   const km = parseFloat(kmMatch[1]);
-                  kmForDate += km;
-                  console.log(`Member ${memberId}: Found ${km} km on ${activityDate}`);
+                  
+                  // Kiểm tra xem activity có bị vi phạm không (có class text-danger)
+                  const activityNameElement = $(post).find('h4.name.ellipsis');
+                  const hasViolation = activityNameElement.hasClass('text-danger');
+                  
+                  if (hasViolation) {
+                    // Nếu có vi phạm, không cộng vào tổng km
+                    violationKm += km;
+                    console.log(`Member ${memberId}: Found VIOLATION ${km} km on ${activityDate} - NOT COUNTED`);
+                  } else {
+                    // Chỉ cộng km hợp lệ
+                    kmForDate += km;
+                    console.log(`Member ${memberId}: Found ${km} km on ${activityDate}`);
+                  }
                 }
               }
             }
           });
 
-          console.log(`Member ${memberId}: Total ${kmForDate} km on ${targetDate}`);
+          console.log(`Member ${memberId}: Total VALID ${kmForDate} km, VIOLATION ${violationKm} km on ${targetDate}`);
 
           return {
             memberId,
             date: targetDate,
             km: kmForDate,
-            originalKm: kmForDate
+            originalKm: kmForDate,
+            violationKm: violationKm
           };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -101,7 +116,8 @@ export async function POST(request: NextRequest) {
             memberId,
             date: targetDate,
             km: 0,
-            originalKm: 0
+            originalKm: 0,
+            violationKm: 0
           };
         }
       })
