@@ -366,7 +366,7 @@ export default function AdminPage() {
             <li>• <strong>Số dương (+20)</strong>: Thêm km (nếu cần)</li>
             <li>• Điều chỉnh sẽ tự động áp dụng vào Daily Rankings</li>
             <li>• BIB Number là số BIB của vận động viên trong hệ thống</li>
-            <li>• <strong>Lưu ý mới:</strong> Activities có class "text-danger" đã được tự động loại bỏ khỏi tổng km</li>
+            <li>• <strong>Lưu ý mới:</strong> Activities có class text-danger đã được tự động loại bỏ khỏi tổng km</li>
           </ul>
         </div>
       </div>
