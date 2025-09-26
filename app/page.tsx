@@ -63,8 +63,19 @@ interface UserData {
   strava_id: string;
 }
 
+interface SafeImageProps {
+  src: string;
+  alt: string;
+  width?: number;
+  height?: number;
+  className?: string;
+  onError?: React.ReactEventHandler<HTMLImageElement>;
+  [key: string]: unknown; // Replace any with unknown
+}
+
 export default function App() {
   const [personalData, setPersonalData] = useState<Member[]>([]);
+  const [filteredPersonalData, setFilteredPersonalData] = useState<Member[]>([]);
   const [teamData, setTeamData] = useState<Team[]>([]);
   const [dailyRankings, setDailyRankings] = useState<DailyMemberKm[]>([]);
   const [raceInfo, setRaceInfo] = useState<RaceInfo | null>(null);
@@ -77,6 +88,22 @@ export default function App() {
   const [countTotalDistance, setCountTotalDistance] = useState(0);
   const [teamSortBy, setTeamSortBy] = useState<'total' | 'average'>('total');
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [genderFilter, setGenderFilter] = useState<'all' | 'male' | 'female'>('all');
+
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    e.currentTarget.src = '/meta.png';
+  };
+
+  // Helper function to get user data by member_id
+  const getUserData = useCallback((memberId: number | string) => {
+    return userData.find(user => user.member_id === String(memberId));
+  }, [userData]);
+
+  // Safe Image component to handle empty src
+  const SafeImage = ({ src, alt, onError, ...props }: SafeImageProps) => {
+    const safeSrc = src && src.trim() !== '' ? src : '/meta.png';
+    return <Image src={safeSrc} alt={alt} onError={onError || handleImageError} {...props} />;
+  };
 
   const customStyles = `
     @keyframes fade-in-up {
@@ -295,10 +322,27 @@ export default function App() {
     }
   };
 
-  // Helper function to get user data by member_id
-  const getUserData = (memberId: number | string) => {
-    return userData.find(user => user.member_id === String(memberId));
-  };
+  // Filter personal data by gender
+  const getFilteredPersonalData = useCallback(() => {
+    if (genderFilter === 'all') {
+      return personalData;
+    }
+    
+    return personalData.filter(member => {
+      const user = getUserData(member.bib_number || member.id);
+      if (!user) return false;
+      
+      const userGender = user.gender.toLowerCase();
+      return genderFilter === 'male' 
+        ? userGender === 'male' || userGender === 'm' 
+        : userGender === 'female' || userGender === 'f';
+    });
+  }, [personalData, genderFilter, getUserData]);
+
+  // Update filtered data when dependencies change
+  useEffect(() => {
+    setFilteredPersonalData(getFilteredPersonalData());
+  }, [getFilteredPersonalData]);
 
   // Sort teams based on selected criteria
   const getSortedTeams = useCallback(() => {
@@ -397,18 +441,33 @@ export default function App() {
     setSelectedDate(e.target.value);
   };
 
-  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    e.currentTarget.src = '/meta.png';
-  };
-
   const isPersonal = activeTab === 'personal';
   const isTeam = activeTab === 'team';
   const isDaily = activeTab === 'daily';
 
+  // Get gender statistics
+  const getGenderStats = () => {
+    const maleCount = personalData.filter(member => {
+      const user = getUserData(member.bib_number || member.id);
+      if (!user) return false;
+      const userGender = user.gender.toLowerCase();
+      return userGender === 'male' || userGender === 'm';
+    }).length;
+
+    const femaleCount = personalData.filter(member => {
+      const user = getUserData(member.bib_number || member.id);
+      if (!user) return false;
+      const userGender = user.gender.toLowerCase();
+      return userGender === 'female' || userGender === 'f';
+    }).length;
+
+    return { maleCount, femaleCount };
+  };
+
   // Personal podium component (responsive)
   const PersonalPodium = () => {
-    if (personalData.length < 3) return null;
-    const top3 = personalData.slice(0, 3);
+    if (filteredPersonalData.length < 3) return null;
+    const top3 = filteredPersonalData.slice(0, 3);
 
     return (
       <div className="hidden md:block mb-8">
@@ -416,7 +475,7 @@ export default function App() {
           {/* Podium layout remains the same but with responsive gaps */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
-              <Image width={40} height={40} src={top3[1].avatar} alt="2nd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={handleImageError} />
+              <SafeImage width={64} height={64} src={top3[1].avatar} alt="2nd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" />
               <div className="absolute -top-2 -right-2 text-2xl md:text-3xl">🥈</div>
             </div>
             <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-4 md:p-6 text-center h-32 md:h-40 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
@@ -432,7 +491,7 @@ export default function App() {
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
             <div className="relative mb-4 animate-float">
               <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
-                <Image width={40} height={40} src={top3[0].avatar} alt="1st" className="h-20 w-20 md:h-24 md:w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={handleImageError} />
+                <SafeImage width={80} height={80} src={top3[0].avatar} alt="1st" className="h-20 w-20 md:h-24 md:w-24 rounded-full object-cover border-4 border-white shadow-2xl" />
               </div>
               <div className="absolute -top-3 -right-3 text-3xl md:text-4xl animate-bounce">👑</div>
             </div>
@@ -453,7 +512,7 @@ export default function App() {
 
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
-              <Image width={40} height={40} src={top3[2].avatar} alt="3rd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={handleImageError} />
+              <SafeImage width={64} height={64} src={top3[2].avatar} alt="3rd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" />
               <div className="absolute -top-2 -right-2 text-2xl md:text-3xl">🥉</div>
             </div>
             <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-4 md:p-6 text-center h-28 md:h-36 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
@@ -616,7 +675,7 @@ export default function App() {
                     <span className="text-lg font-bold">{rankStyle.icon} {rank}</span>
                   </div>
                   <div className="flex items-center flex-1">
-                    <Image width={40} height={40} src={record.avatar} alt={record.memberName} className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20" onError={handleImageError} />
+                    <SafeImage width={40} height={40} src={record.avatar} alt={record.memberName} className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20" />
                     <div className="flex-1">
                       <div className="font-bold text-white text-sm truncate">{record.memberName}</div>
                       <div className="text-xs text-gray-300">{record.teamName}</div>
@@ -634,7 +693,7 @@ export default function App() {
           {/* 2nd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
-              <Image width={64} height={64} src={top3[1].avatar} alt="2nd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" onError={handleImageError} />
+              <SafeImage width={64} height={64} src={top3[1].avatar} alt="2nd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" />
               <div className="absolute -top-2 -right-2 text-2xl md:text-3xl">🥈</div>
             </div>
             <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-4 md:p-6 text-center h-32 md:h-40 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
@@ -651,7 +710,7 @@ export default function App() {
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
             <div className="relative mb-4 animate-float">
               <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
-                <Image width={80} height={80} src={top3[0].avatar} alt="1st" className="h-20 w-20 md:h-24 md:w-24 rounded-full object-cover border-4 border-white shadow-2xl" onError={handleImageError} />
+                <SafeImage width={80} height={80} src={top3[0].avatar} alt="1st" className="h-20 w-20 md:h-24 md:w-24 rounded-full object-cover border-4 border-white shadow-2xl" />
               </div>
               <div className="absolute -top-3 -right-3 text-3xl md:text-4xl animate-bounce">👑</div>
             </div>
@@ -673,7 +732,7 @@ export default function App() {
           {/* 3rd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
-              <Image width={64} height={64} src={top3[2].avatar} alt="3rd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" onError={handleImageError} />
+              <SafeImage width={64} height={64} src={top3[2].avatar} alt="3rd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" />
               <div className="absolute -top-2 -right-2 text-2xl md:text-3xl">🥉</div>
             </div>
             <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-4 md:p-6 text-center h-28 md:h-36 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
@@ -690,6 +749,8 @@ export default function App() {
     );
   };
 
+  const { maleCount, femaleCount } = getGenderStats();
+
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: customStyles }} />
@@ -697,7 +758,7 @@ export default function App() {
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white">
         <div className="relative overflow-hidden bg-black">
           <div className="absolute inset-0">
-            <Image 
+            <SafeImage 
               src='/meta.jpg'
               width={1920}  
               height={1080}
@@ -799,6 +860,34 @@ export default function App() {
               </h2>
             </div>
 
+            {isPersonal && (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-4 mobile-w-full">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs md:text-sm font-medium text-white">Filter:</span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setGenderFilter('all')}
+                      className={`px-2 py-1 md:px-3 md:py-1 rounded-md text-xs transition-all ${genderFilter === 'all' ? 'bg-orange-500 text-white' : 'bg-white/10 text-gray-300 hover:text-white'}`}
+                    >
+                      All ({personalData.length})
+                    </button>
+                    <button
+                      onClick={() => setGenderFilter('male')}
+                      className={`px-2 py-1 md:px-3 md:py-1 rounded-md text-xs transition-all ${genderFilter === 'male' ? 'bg-blue-500 text-white' : 'bg-white/10 text-gray-300 hover:text-white'}`}
+                    >
+                      👨 Nam ({maleCount})
+                    </button>
+                    <button
+                      onClick={() => setGenderFilter('female')}
+                      className={`px-2 py-1 md:px-3 md:py-1 rounded-md text-xs transition-all ${genderFilter === 'female' ? 'bg-pink-500 text-white' : 'bg-white/10 text-gray-300 hover:text-white'}`}
+                    >
+                      👩 Nữ ({femaleCount})
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {isDaily && (
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-4 mobile-w-full">
                 <label className="text-xs md:text-sm font-medium text-white whitespace-nowrap">Chọn ngày:</label>
@@ -862,8 +951,8 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
-                      {personalData.map((member, index) => {
-                        const rank = member.order;
+                      {filteredPersonalData.map((member, index) => {
+                        const rank = index + 1; // Re-rank based on filtered data
                         const rankStyle = getRankStyling(rank);
                         const totalKm = parseFloat(member.final_value || '0');
                         const percentage = parseFloat(member.percent_finish || '0');
@@ -878,9 +967,16 @@ export default function App() {
                             </td>
                             <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Tên">
                               <div className="flex items-center">
-                                <Image width={32} height={32} src={member.avatar || '/meta.png'} alt="Avatar" className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover mr-2 md:mr-3 border-2 border-white/20 shadow-md" onError={handleImageError} />
+                                <SafeImage width={32} height={32} src={member.avatar || '/meta.png'} alt="Avatar" className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover mr-2 md:mr-3 border-2 border-white/20 shadow-md" />
                                 <div>
-                                  <div className="text-xs md:text-sm font-semibold text-white truncate max-w-[120px] md:max-w-none">{member.full_name}</div>
+                                  <div className="text-xs md:text-sm font-semibold text-white truncate max-w-[120px] md:max-w-none flex items-center gap-2">
+                                    {member.full_name}
+                                    {user && (
+                                      <span className={`text-xs ${user.gender.toLowerCase() === 'male' || user.gender.toLowerCase() === 'm' ? 'text-blue-400' : 'text-pink-400'}`}>
+                                        {user.gender.toLowerCase() === 'male' || user.gender.toLowerCase() === 'm' ? '👨' : '👩'}
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="text-xs text-gray-300">BIB: {member.bib_number || 'N/A'}</div>
                                   <div className="md:hidden text-xs text-gray-400 mt-1">{member.team_name}</div>
                                 </div>
@@ -1049,7 +1145,7 @@ export default function App() {
                               </td>
                               <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Vận động viên">
                                 <div className="flex items-center">
-                                  <Image width={32} height={32} src={record.avatar} alt={record.memberName} className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover mr-2 md:mr-3 border-2 border-white/20 shadow-md" onError={handleImageError} />
+                                  <SafeImage width={32} height={32} src={record.avatar} alt={record.memberName} className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover mr-2 md:mr-3 border-2 border-white/20 shadow-md" />
                                   <div>
                                     <div className="text-xs md:text-sm font-semibold text-white truncate max-w-[120px] md:max-w-none">{record.memberName}</div>
                                     <div className="text-xs text-gray-300">BIB: {record.memberId}</div>
