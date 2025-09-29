@@ -1745,7 +1745,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-
+    
               <div className="overflow-hidden rounded-xl md:rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
                 {weeklyTeamLoading ? (
                   <div className="flex flex-col items-center justify-center py-16 md:py-20">
