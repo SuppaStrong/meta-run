@@ -1003,13 +1003,6 @@ export default function App() {
 
           <div className="relative container mx-auto px-3 md:px-4 py-6 md:py-8 lg:py-20">
             <div className="max-w-6xl mx-auto">
-              <div className="animate-slide-in mb-4 md:mb-6">
-                <span className="inline-flex items-center gap-2 px-3 py-2 md:px-4 md:py-2 bg-orange-500/20 backdrop-blur-sm border border-orange-500/30 rounded-full text-orange-300 text-xs md:text-sm font-semibold">
-                  <span className="text-sm md:text-base lg:text-lg">🏃</span>
-                  META RUNNING CHALLENGE
-                </span>
-              </div>
-
               <h1 className="text-2xl md:text-4xl lg:text-6xl font-black text-white mb-4 md:mb-6 text-shadow-lg animate-fade-in-up">
                 {raceInfo?.meta_title || raceInfo?.title || 'META RUN 2025'}
               </h1>

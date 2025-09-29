@@ -10,7 +10,7 @@ const nextConfig = {
       },
     ],
   },
-  allowedDevOrigins: ['http://127.0.2.2'],
+  allowedDevOrigins: ['http://127.0.2.2', 'http://localhost:3000'],
 }
 
 module.exports = nextConfig
