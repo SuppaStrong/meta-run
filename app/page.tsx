@@ -992,6 +992,7 @@ export default function App() {
         <div className="relative overflow-hidden bg-black">
           <div className="absolute inset-0">
             <SafeImage 
+              priority={false}
               src='/meta.jpg'
               width={1920}  
               height={1080}

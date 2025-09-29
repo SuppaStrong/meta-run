@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { calculateWeeklyKm, applyAdjustments, loadUsersFromFile } from '@/lib/weekly-km';
 
 const weeklyTeamCache = new Map<string, CacheEntry>();
-const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+const CACHE_DURATION = 10 * 60 * 1000;
 
 interface CacheEntry {
   data: WeeklyTeamResult[];
@@ -23,19 +24,8 @@ interface WeeklyTeamResult {
 }
 
 interface RequestBody {
-  startDate: string; // Monday
-  endDate: string;   // Sunday
-}
-
-interface UserData {
-  name: string;
-  member_id: string;
-  team_name?: string;
-}
-
-interface WeeklyMemberKm {
-  memberId: number;
-  totalKm: number;
+  startDate: string;
+  endDate: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -47,51 +37,29 @@ export async function POST(request: NextRequest) {
     // Check cache
     const cached = weeklyTeamCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-      console.log('Returning cached weekly team data for', startDate, 'to', endDate);
+      console.log('Returning cached weekly team data');
       return NextResponse.json(cached.data);
     }
 
-    console.log(`Fetching weekly team km from ${startDate} to ${endDate}`);
+    console.log(`Calculating weekly team km from ${startDate} to ${endDate}`);
 
-    // Load user.json to get team mappings
-    const usersResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/user.json`,
-      { cache: 'no-store' }
-    );
-    
-    if (!usersResponse.ok) {
-      throw new Error('Failed to load user data');
-    }
-
-    const users: UserData[] = await usersResponse.json();
-    
-    // Get all member IDs
+    // ✅ Load users directly from file system
+    const users = await loadUsersFromFile();
     const memberIds = users.map(u => parseInt(u.member_id));
 
-    // Fetch weekly km for all members
-    const weeklyKmResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/weekly-km`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ memberIds, startDate, endDate }),
-        cache: 'no-store'
-      }
-    );
+    // ✅ Calculate weekly km using shared logic
+    let weeklyKmData = await calculateWeeklyKm(memberIds, startDate, endDate);
+    
+    // Apply adjustments
+    weeklyKmData = await applyAdjustments(weeklyKmData, startDate, endDate);
 
-    if (!weeklyKmResponse.ok) {
-      throw new Error('Failed to fetch weekly km data');
-    }
-
-    const weeklyKmData: WeeklyMemberKm[] = await weeklyKmResponse.json();
-
-    // Create a map of memberId -> km
+    // Create member km map
     const memberKmMap = new Map<number, number>();
     weeklyKmData.forEach(data => {
       memberKmMap.set(data.memberId, data.totalKm);
     });
 
-    // Group members by team
+    // Group by team
     const teamMap = new Map<string, {
       members: { memberId: number; memberName: string; km: number }[];
       totalKm: number;
@@ -103,22 +71,15 @@ export async function POST(request: NextRequest) {
       const teamName = user.team_name || 'No Team';
 
       if (!teamMap.has(teamName)) {
-        teamMap.set(teamName, {
-          members: [],
-          totalKm: 0
-        });
+        teamMap.set(teamName, { members: [], totalKm: 0 });
       }
 
       const team = teamMap.get(teamName)!;
-      team.members.push({
-        memberId,
-        memberName: user.name,
-        km
-      });
+      team.members.push({ memberId, memberName: user.name, km });
       team.totalKm += km;
     });
 
-    // Convert to array and calculate stats
+    // Convert to results array
     const results: WeeklyTeamResult[] = [];
     teamMap.forEach((teamData, teamName) => {
       results.push({
@@ -126,22 +87,21 @@ export async function POST(request: NextRequest) {
         totalKm: teamData.totalKm,
         memberCount: teamData.members.length,
         avgKm: teamData.totalKm / teamData.members.length,
-        members: teamData.members.sort((a, b) => b.km - a.km), // Sort members by km descending
+        members: teamData.members.sort((a, b) => b.km - a.km),
         startDate,
         endDate
       });
     });
 
-    // Sort teams by totalKm descending
     results.sort((a, b) => b.totalKm - a.totalKm);
 
-    // Cache the results
+    // Cache results
     weeklyTeamCache.set(cacheKey, {
       data: results,
       timestamp: Date.now()
     });
 
-    console.log(`Successfully calculated weekly team rankings for ${results.length} teams`);
+    console.log(`Successfully calculated ${results.length} teams`);
     return NextResponse.json(results);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
