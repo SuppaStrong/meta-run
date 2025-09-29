@@ -16,6 +16,8 @@ interface Member {
   update_time: string;
   member_count?: number;
   bib_number?: number;
+  original_km?: number;
+  adjustment_km?: number;
 }
 
 interface Team {
@@ -40,6 +42,37 @@ interface DailyMemberKm {
   date: string;
   km: number;
   violationKm?: number;
+}
+
+interface WeeklyMemberKm {
+  memberId: number;
+  memberName: string;
+  avatar: string;
+  teamName: string;
+  startDate: string;
+  endDate: string;
+  totalKm: number;
+  adjustmentKm?: number;
+  violationKm?: number;
+  dailyBreakdown: {
+    date: string;
+    km: number;
+    violationKm: number;
+  }[];
+}
+
+interface WeeklyTeamKm {
+  teamName: string;
+  totalKm: number;
+  memberCount: number;
+  avgKm: number;
+  members: {
+    memberId: number;
+    memberName: string;
+    km: number;
+  }[];
+  startDate: string;
+  endDate: string;
 }
 
 interface RaceInfo {
@@ -70,23 +103,49 @@ interface SafeImageProps {
   height?: number;
   className?: string;
   onError?: React.ReactEventHandler<HTMLImageElement>;
-  [key: string]: unknown; // Replace any with unknown
+  [key: string]: unknown;
 }
+
+// Helper functions for week calculation (outside component to avoid dependency issues)
+const getMonday = (date: Date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+};
+
+const getSunday = (date: Date) => {
+  const monday = getMonday(date);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return sunday;
+};
+
+const formatDateForAPI = (date: Date) => {
+  return date.toISOString().split('T')[0];
+};
 
 export default function App() {
   const [personalData, setPersonalData] = useState<Member[]>([]);
   const [filteredPersonalData, setFilteredPersonalData] = useState<Member[]>([]);
   const [teamData, setTeamData] = useState<Team[]>([]);
   const [dailyRankings, setDailyRankings] = useState<DailyMemberKm[]>([]);
+  const [weeklyRankings, setWeeklyRankings] = useState<WeeklyMemberKm[]>([]);
+  const [weeklyTeamRankings, setWeeklyTeamRankings] = useState<WeeklyTeamKm[]>([]);
   const [raceInfo, setRaceInfo] = useState<RaceInfo | null>(null);
   const [userData, setUserData] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [dailyLoading, setDailyLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'personal' | 'team' | 'daily'>('personal');
+  const [weeklyLoading, setWeeklyLoading] = useState(false);
+  const [weeklyTeamLoading, setWeeklyTeamLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'personal' | 'team' | 'daily' | 'weekly' | 'weeklyTeam'>('personal');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedWeekDate, setSelectedWeekDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedWeekTeamDate, setSelectedWeekTeamDate] = useState(new Date().toISOString().split('T')[0]);
   const [showConfetti, setShowConfetti] = useState(false);
   const [countTotalDistance, setCountTotalDistance] = useState(0);
   const [teamSortBy, setTeamSortBy] = useState<'total' | 'average'>('total');
+  const [weeklyTeamSortBy, setWeeklyTeamSortBy] = useState<'total' | 'average'>('total');
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [genderFilter, setGenderFilter] = useState<'all' | 'male' | 'female'>('all');
 
@@ -94,12 +153,10 @@ export default function App() {
     e.currentTarget.src = '/meta.png';
   };
 
-  // Helper function to get user data by member_id
   const getUserData = useCallback((memberId: number | string) => {
     return userData.find(user => user.member_id === String(memberId));
   }, [userData]);
 
-  // Safe Image component to handle empty src
   const SafeImage = ({ src, alt, onError, ...props }: SafeImageProps) => {
     const safeSrc = src && src.trim() !== '' ? src : '/meta.png';
     return <Image src={safeSrc} alt={alt} onError={onError || handleImageError} {...props} />;
@@ -204,7 +261,6 @@ export default function App() {
       background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.9));
     }
 
-    /* Mobile responsive table */
     @media (max-width: 768px) {
       .mobile-table {
         display: block;
@@ -255,7 +311,6 @@ export default function App() {
       .mobile-shadow { box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important; }
     }
 
-    /* Improved mobile spacing and layout */
     @media (max-width: 640px) {
       .container {
         padding-left: 1rem !important;
@@ -322,7 +377,6 @@ export default function App() {
     }
   };
 
-  // Filter personal data by gender
   const getFilteredPersonalData = useCallback(() => {
     if (genderFilter === 'all') {
       return personalData;
@@ -339,12 +393,10 @@ export default function App() {
     });
   }, [personalData, genderFilter, getUserData]);
 
-  // Update filtered data when dependencies change
   useEffect(() => {
     setFilteredPersonalData(getFilteredPersonalData());
   }, [getFilteredPersonalData]);
 
-  // Sort teams based on selected criteria
   const getSortedTeams = useCallback(() => {
     const sorted = [...teamData].sort((a, b) => {
       if (teamSortBy === 'total') {
@@ -395,11 +447,88 @@ export default function App() {
     }
   }, [personalData]);
 
+  const fetchWeeklyRankings = useCallback(async (weekDate: string) => {
+    setWeeklyLoading(true);
+    try {
+      const memberIds = personalData
+        .filter(m => m.bib_number)
+        .map(m => m.bib_number as number);
+
+      if (memberIds.length === 0) {
+        console.log('No members with bib_number found');
+        setWeeklyLoading(false);
+        return;
+      }
+
+      const monday = getMonday(new Date(weekDate));
+      const sunday = getSunday(new Date(weekDate));
+      const startDate = formatDateForAPI(monday);
+      const endDate = formatDateForAPI(sunday);
+
+      const response = await fetch('/api/weekly-km', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberIds, startDate, endDate })
+      });
+
+      const results = await response.json();
+      
+      const enrichedResults = results.map((r: WeeklyMemberKm) => {
+        const member = personalData.find(m => m.bib_number === r.memberId);
+        return {
+          ...r,
+          memberName: member?.full_name || 'Unknown',
+          avatar: member?.avatar || '/meta.png',
+          teamName: member?.team_name || 'N/A'
+        };
+      });
+
+      setWeeklyRankings(enrichedResults);
+    } catch (error) {
+      console.error('Error fetching weekly rankings:', error);
+    } finally {
+      setWeeklyLoading(false);
+    }
+  }, [personalData]);
+
+  const fetchWeeklyTeamRankings = useCallback(async (weekDate: string) => {
+    setWeeklyTeamLoading(true);
+    try {
+      const monday = getMonday(new Date(weekDate));
+      const sunday = getSunday(new Date(weekDate));
+      const startDate = formatDateForAPI(monday);
+      const endDate = formatDateForAPI(sunday);
+
+      const response = await fetch('/api/weekly-team-km', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startDate, endDate })
+      });
+
+      const results = await response.json();
+      setWeeklyTeamRankings(results);
+    } catch (error) {
+      console.error('Error fetching weekly team rankings:', error);
+    } finally {
+      setWeeklyTeamLoading(false);
+    }
+  }, []);
+
+  const getSortedWeeklyTeams = useCallback(() => {
+    const sorted = [...weeklyTeamRankings].sort((a, b) => {
+      if (weeklyTeamSortBy === 'total') {
+        return b.totalKm - a.totalKm;
+      } else {
+        return b.avgKm - a.avgKm;
+      }
+    });
+    return sorted;
+  }, [weeklyTeamRankings, weeklyTeamSortBy]);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Load user data
         const userResponse = await fetch('/user.json');
         const userJson = await userResponse.json();
         setUserData(userJson);
@@ -437,15 +566,36 @@ export default function App() {
     }
   }, [activeTab, selectedDate, personalData, fetchDailyRankings]);
 
+  useEffect(() => {
+    if (activeTab === 'weekly' && personalData.length > 0) {
+      fetchWeeklyRankings(selectedWeekDate);
+    }
+  }, [activeTab, selectedWeekDate, personalData, fetchWeeklyRankings]);
+
+  useEffect(() => {
+    if (activeTab === 'weeklyTeam') {
+      fetchWeeklyTeamRankings(selectedWeekTeamDate);
+    }
+  }, [activeTab, selectedWeekTeamDate, fetchWeeklyTeamRankings]);
+
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedDate(e.target.value);
+  };
+
+  const handleWeekDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedWeekDate(e.target.value);
+  };
+
+  const handleWeekTeamDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedWeekTeamDate(e.target.value);
   };
 
   const isPersonal = activeTab === 'personal';
   const isTeam = activeTab === 'team';
   const isDaily = activeTab === 'daily';
+  const isWeekly = activeTab === 'weekly';
+  const isWeeklyTeam = activeTab === 'weeklyTeam';
 
-  // Get gender statistics
   const getGenderStats = () => {
     const maleCount = personalData.filter(member => {
       const user = getUserData(member.bib_number || member.id);
@@ -464,7 +614,6 @@ export default function App() {
     return { maleCount, femaleCount };
   };
 
-  // Personal podium component (responsive)
   const PersonalPodium = () => {
     if (filteredPersonalData.length < 3) return null;
     const top3 = filteredPersonalData.slice(0, 3);
@@ -472,7 +621,6 @@ export default function App() {
     return (
       <div className="hidden md:block mb-8">
         <div className="flex justify-center items-end gap-4 md:gap-6 h-80 md:h-96">
-          {/* Podium layout remains the same but with responsive gaps */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
               <SafeImage width={64} height={64} src={top3[1].avatar} alt="2nd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" />
@@ -542,7 +690,6 @@ export default function App() {
           </h3>
         </div>
         
-        {/* Mobile Podium */}
         <div className="block md:hidden space-y-3">
           {top3.map((team, index) => {
             const rank = index + 1;
@@ -569,9 +716,7 @@ export default function App() {
           })}
         </div>
 
-        {/* Desktop Podium */}
         <div className="hidden md:flex justify-center items-end gap-4 md:gap-6 h-80 md:h-96">
-          {/* 2nd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
               <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center border-4 border-white shadow-xl">
@@ -594,7 +739,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* 1st Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
             <div className="relative mb-4 animate-float">
               <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
@@ -624,7 +768,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* 3rd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
               <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center border-4 border-white shadow-xl">
@@ -663,7 +806,6 @@ export default function App() {
           </h3>
         </div>
         
-        {/* Mobile Podium */}
         <div className="block md:hidden space-y-3">
           {top3.map((record, index) => {
             const rank = index + 1;
@@ -688,9 +830,7 @@ export default function App() {
           })}
         </div>
 
-        {/* Desktop Podium */}
         <div className="hidden md:flex justify-center items-end gap-4 md:gap-6 h-80 md:h-96">
-          {/* 2nd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
               <SafeImage width={64} height={64} src={top3[1].avatar} alt="2nd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" />
@@ -706,7 +846,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* 1st Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
             <div className="relative mb-4 animate-float">
               <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
@@ -729,7 +868,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* 3rd Place */}
           <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
             <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
               <SafeImage width={64} height={64} src={top3[2].avatar} alt="3rd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" />
@@ -738,6 +876,101 @@ export default function App() {
             <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-4 md:p-6 text-center h-28 md:h-36 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
               <div className="font-bold text-white text-sm md:text-lg truncate mb-2">{top3[2].memberName}</div>
               <div className="text-xs md:text-sm text-amber-200 font-semibold">{top3[2].km.toFixed(2)} km</div>
+              <div className="text-xs text-amber-300 mt-1 truncate">{top3[2].teamName}</div>
+            </div>
+            <div className="bg-gradient-to-b from-amber-600 to-amber-800 w-full h-20 md:h-24 rounded-b-2xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-2xl md:text-3xl">3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const WeeklyPodium = () => {
+    if (weeklyRankings.length < 3) return null;
+    const top3 = weeklyRankings.slice(0, 3);
+    const monday = getMonday(new Date(selectedWeekDate));
+    const sunday = getSunday(new Date(selectedWeekDate));
+
+    return (
+      <div className="mb-6 md:mb-8">
+        <div className="text-center mb-4 md:mb-6">
+          <h3 className="text-sm md:text-lg lg:text-xl font-bold text-orange-400">
+            🏆 Top 3 tuần {formatDate(formatDateForAPI(monday))} - {formatDate(formatDateForAPI(sunday))}
+          </h3>
+        </div>
+        
+        <div className="block md:hidden space-y-3">
+          {top3.map((record, index) => {
+            const rank = index + 1;
+            const rankStyle = getRankStyling(rank);
+            return (
+              <div key={`${record.memberId}-${index}`} className="backdrop-blur-md bg-white/10 rounded-xl p-4 border border-white/20">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-full ${rankStyle.bg} ${rankStyle.text} flex items-center justify-center`}>
+                    <span className="text-lg font-bold">{rankStyle.icon} {rank}</span>
+                  </div>
+                  <div className="flex items-center flex-1">
+                    <SafeImage width={40} height={40} src={record.avatar} alt={record.memberName} className="h-10 w-10 rounded-full object-cover mr-3 border-2 border-white/20" />
+                    <div className="flex-1">
+                      <div className="font-bold text-white text-sm truncate">{record.memberName}</div>
+                      <div className="text-xs text-gray-300">{record.teamName}</div>
+                      <div className="text-orange-400 text-sm font-semibold">{record.totalKm.toFixed(2)} km</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:flex justify-center items-end gap-4 md:gap-6 h-80 md:h-96">
+          <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+            <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
+              <SafeImage width={64} height={64} src={top3[1].avatar} alt="2nd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-gray-300 shadow-xl" />
+              <div className="absolute -top-2 -right-2 text-2xl md:text-3xl">🥈</div>
+            </div>
+            <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-4 md:p-6 text-center h-32 md:h-40 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
+              <div className="font-bold text-white text-sm md:text-lg truncate mb-2">{top3[1].memberName}</div>
+              <div className="text-xs md:text-sm text-gray-200 font-semibold">{top3[1].totalKm.toFixed(2)} km</div>
+              <div className="text-xs text-gray-300 mt-1 truncate">{top3[1].teamName}</div>
+            </div>
+            <div className="bg-gradient-to-b from-gray-300 to-gray-500 w-full h-24 md:h-28 rounded-b-2xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-2xl md:text-3xl">2</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
+            <div className="relative mb-4 animate-float">
+              <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
+                <SafeImage width={80} height={80} src={top3[0].avatar} alt="1st" className="h-20 w-20 md:h-24 md:w-24 rounded-full object-cover border-4 border-white shadow-2xl" />
+              </div>
+              <div className="absolute -top-3 -right-3 text-3xl md:text-4xl animate-bounce">👑</div>
+            </div>
+            <div className="backdrop-blur-md bg-gradient-to-br from-yellow-400/30 via-orange-400/30 to-yellow-400/30 rounded-2xl p-4 md:p-6 text-center h-40 md:h-48 w-48 md:w-56 flex flex-col justify-center shadow-2xl border-2 border-yellow-300/40 relative overflow-hidden">
+              <div className="absolute inset-0 animate-shimmer"></div>
+              <div className="relative z-10">
+                <div className="text-lg md:text-2xl mb-2">🏆 WEEKLY CHAMPION</div>
+                <div className="font-bold text-white text-base md:text-xl truncate mb-2">{top3[0].memberName}</div>
+                <div className="text-xs md:text-sm text-yellow-100 font-semibold">{top3[0].totalKm.toFixed(2)} km</div>
+                <div className="text-xs text-yellow-200 mt-1 truncate">{top3[0].teamName}</div>
+              </div>
+            </div>
+            <div className="bg-gradient-to-b from-yellow-400 via-yellow-500 to-yellow-600 w-full h-32 md:h-40 rounded-b-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
+              <div className="absolute inset-0 animate-shimmer"></div>
+              <span className="text-white font-bold text-3xl md:text-4xl relative z-10">1</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+            <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
+              <SafeImage width={64} height={64} src={top3[2].avatar} alt="3rd" className="h-16 w-16 md:h-20 md:w-20 rounded-full object-cover border-4 border-amber-600 shadow-xl" />
+              <div className="absolute -top-2 -right-2 text-2xl md:text-3xl">🥉</div>
+            </div>
+            <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-4 md:p-6 text-center h-28 md:h-36 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
+              <div className="font-bold text-white text-sm md:text-lg truncate mb-2">{top3[2].memberName}</div>
+              <div className="text-xs md:text-sm text-amber-200 font-semibold">{top3[2].totalKm.toFixed(2)} km</div>
               <div className="text-xs text-amber-300 mt-1 truncate">{top3[2].teamName}</div>
             </div>
             <div className="bg-gradient-to-b from-amber-600 to-amber-800 w-full h-20 md:h-24 rounded-b-2xl flex items-center justify-center shadow-lg">
@@ -853,10 +1086,10 @@ export default function App() {
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 md:mb-6 lg:mb-8 gap-3 md:gap-4 lg:gap-6 backdrop-blur-md bg-white/10 rounded-xl md:rounded-2xl p-4 md:p-6 border border-white/20 shadow-xl mobile-flex-col mobile-items-start">
             <div className="flex items-center gap-3 md:gap-4">
               <div className="text-xl md:text-2xl">
-                {isPersonal ? '👤' : isTeam ? '👥' : '📅'}
+                {isPersonal ? '👤' : isTeam ? '👥' : isDaily ? '📅' : isWeekly ? '📊' : '🏆'}
               </div>
               <h2 className="text-lg md:text-2xl font-bold text-white">
-                {isPersonal ? 'Personal Rankings' : isTeam ? 'Team Rankings' : 'Daily Rankings'}
+                {isPersonal ? 'Personal Rankings' : isTeam ? 'Team Rankings' : isDaily ? 'Daily Rankings' : isWeekly ? 'Weekly Rankings' : 'Weekly Team Rankings'}
               </h2>
             </div>
 
@@ -900,28 +1133,76 @@ export default function App() {
                 />
               </div>
             )}
+
+            {isWeekly && (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-4 mobile-w-full">
+                <label className="text-xs md:text-sm font-medium text-white whitespace-nowrap">Chọn tuần:</label>
+                <div className="flex flex-col gap-1">
+                  <input
+                    type="date"
+                    value={selectedWeekDate}
+                    onChange={handleWeekDateChange}
+                    className="px-3 py-2 md:px-4 md:py-2 rounded-lg md:rounded-xl bg-white/10 border border-white/20 text-white text-sm backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-orange-400 mobile-w-full"
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                  <span className="text-xs text-gray-400">
+                    {formatDate(formatDateForAPI(getMonday(new Date(selectedWeekDate))))} - {formatDate(formatDateForAPI(getSunday(new Date(selectedWeekDate))))}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {isWeeklyTeam && (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-4 mobile-w-full">
+                <label className="text-xs md:text-sm font-medium text-white whitespace-nowrap">Chọn tuần:</label>
+                <div className="flex flex-col gap-1">
+                  <input
+                    type="date"
+                    value={selectedWeekTeamDate}
+                    onChange={handleWeekTeamDateChange}
+                    className="px-3 py-2 md:px-4 md:py-2 rounded-lg md:rounded-xl bg-white/10 border border-white/20 text-white text-sm backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-orange-400 mobile-w-full"
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                  <span className="text-xs text-gray-400">
+                    {formatDate(formatDateForAPI(getMonday(new Date(selectedWeekTeamDate))))} - {formatDate(formatDateForAPI(getSunday(new Date(selectedWeekTeamDate))))}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-center mb-4 md:mb-6 lg:mb-8">
-            <div className="backdrop-blur-md bg-white/10 rounded-xl md:rounded-2xl p-1 md:p-2 border border-white/20 shadow-lg w-full max-w-md md:max-w-none md:w-auto">
-              <div className="flex flex-col sm:flex-row gap-1">
+            <div className="backdrop-blur-md bg-white/10 rounded-xl md:rounded-2xl p-1 md:p-2 border border-white/20 shadow-lg w-full max-w-2xl md:max-w-none md:w-auto overflow-x-auto">
+              <div className="flex gap-1 min-w-max">
                 <button 
                   onClick={() => setActiveTab('personal')} 
-                  className={`py-2 px-3 md:py-3 md:px-8 font-bold rounded-lg md:rounded-xl transition-all duration-200 text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 flex-1 sm:flex-initial ${activeTab === 'personal' ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
+                  className={`py-2 px-3 md:py-3 md:px-5 font-bold rounded-lg md:rounded-xl transition-all duration-200 text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 whitespace-nowrap ${activeTab === 'personal' ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
                 >
                   <span>👤</span> Personal
                 </button>
                 <button 
                   onClick={() => setActiveTab('team')} 
-                  className={`py-2 px-3 md:py-3 md:px-8 font-bold rounded-lg md:rounded-xl transition-all duration-200 text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 flex-1 sm:flex-initial ${activeTab === 'team' ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
+                  className={`py-2 px-3 md:py-3 md:px-5 font-bold rounded-lg md:rounded-xl transition-all duration-200 text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 whitespace-nowrap ${activeTab === 'team' ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
                 >
                   <span>👥</span> Team
                 </button>
                 <button 
                   onClick={() => setActiveTab('daily')} 
-                  className={`py-2 px-3 md:py-3 md:px-8 font-bold rounded-lg md:rounded-xl transition-all duration-200 text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 flex-1 sm:flex-initial ${activeTab === 'daily' ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
+                  className={`py-2 px-3 md:py-3 md:px-5 font-bold rounded-lg md:rounded-xl transition-all duration-200 text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 whitespace-nowrap ${activeTab === 'daily' ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
                 >
                   <span>📅</span> Daily
+                </button>
+                <button 
+                  onClick={() => setActiveTab('weekly')} 
+                  className={`py-2 px-3 md:py-3 md:px-5 font-bold rounded-lg md:rounded-xl transition-all duration-200 text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 whitespace-nowrap ${activeTab === 'weekly' ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
+                >
+                  <span>📊</span> Weekly
+                </button>
+                <button 
+                  onClick={() => setActiveTab('weeklyTeam')} 
+                  className={`py-2 px-3 md:py-3 md:px-5 font-bold rounded-lg md:rounded-xl transition-all duration-200 text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 whitespace-nowrap ${activeTab === 'weeklyTeam' ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
+                >
+                  <span>🏆</span> W.Team
                 </button>
               </div>
             </div>
@@ -952,11 +1233,12 @@ export default function App() {
                     </thead>
                     <tbody className="divide-y divide-white/10">
                       {filteredPersonalData.map((member, index) => {
-                        const rank = index + 1; // Re-rank based on filtered data
+                        const rank = index + 1;
                         const rankStyle = getRankStyling(rank);
                         const totalKm = parseFloat(member.final_value || '0');
                         const percentage = parseFloat(member.percent_finish || '0');
                         const user = getUserData(member.bib_number || member.id);
+                        const hasAdjustment = member.adjustment_km !== undefined && member.adjustment_km !== 0;
 
                         return (
                           <tr key={member.id || index} className={`hover:bg-white/5 transition-colors duration-200 ${rank <= 3 ? 'bg-white/5' : ''}`}>
@@ -984,6 +1266,11 @@ export default function App() {
                             </td>
                             <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Quãng đường">
                               <div className="text-xs md:text-sm font-semibold text-white">{totalKm.toFixed(2)} km</div>
+                              {hasAdjustment && (
+                                <div className={`text-xs ${member.adjustment_km! < 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                  Điều chỉnh: {member.adjustment_km! > 0 ? '+' : ''}{member.adjustment_km!.toFixed(2)} km
+                                </div>
+                              )}
                               <div className="text-xs text-gray-400">{percentage.toFixed(1)}%</div>
                               <div className="md:hidden mt-1">
                                 <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${percentage >= 100 ? 'bg-green-500/30 text-green-200' : 'bg-orange-500/30 text-orange-200'}`}>
@@ -1203,6 +1490,335 @@ export default function App() {
                     <div className="text-3xl md:text-4xl mb-4">📅</div>
                     <div className="text-base md:text-lg text-white font-semibold">Chưa có dữ liệu cho ngày này</div>
                     <div className="text-sm text-gray-300 mt-2">Vui lòng chọn ngày khác</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!loading && isWeekly && (
+            <div className="space-y-4 md:space-y-6 pt-8 md:pt-20">
+              {!weeklyLoading && weeklyRankings.length >= 3 && <WeeklyPodium />}
+
+              <div className="overflow-hidden rounded-xl md:rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
+                {weeklyLoading ? (
+                  <div className="flex flex-col items-center justify-center py-16 md:py-20">
+                    <div className="animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-4 border-gray-400 border-t-orange-400"></div>
+                    <div className="mt-4 text-white font-medium text-sm md:text-base">
+                      Đang tải dữ liệu tuần {formatDate(formatDateForAPI(getMonday(new Date(selectedWeekDate))))} - {formatDate(formatDateForAPI(getSunday(new Date(selectedWeekDate))))}...
+                    </div>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full mobile-table">
+                      <thead className="backdrop-blur-sm bg-white/20">
+                        <tr>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">🏅 Hạng</th>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">👤 Vận động viên</th>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white mobile-hidden">📅 Tuần</th>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">🏃‍♂️ Tổng KM</th>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white mobile-hidden">Team</th>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">🔗 Links</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/10">
+                        {weeklyRankings.map((record, index) => {
+                          const rank = index + 1;
+                          const rankStyle = getRankStyling(rank);
+                          const user = getUserData(record.memberId);
+                          const hasAdjustment = record.adjustmentKm !== undefined && record.adjustmentKm !== 0;
+
+                          return (
+                            <tr key={`${record.memberId}-${index}`} className={`hover:bg-white/5 transition-colors ${rank <= 3 ? 'bg-white/5' : ''}`}>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Hạng">
+                                <div className={`inline-flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full ${rankStyle.bg} ${rankStyle.text} shadow-lg`}>
+                                  <span className="text-xs md:text-sm font-bold">{rankStyle.icon} {rank}</span>
+                                </div>
+                              </td>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Vận động viên">
+                                <div className="flex items-center">
+                                  <SafeImage width={32} height={32} src={record.avatar} alt={record.memberName} className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover mr-2 md:mr-3 border-2 border-white/20 shadow-md" />
+                                  <div>
+                                    <div className="text-xs md:text-sm font-semibold text-white truncate max-w-[120px] md:max-w-none">{record.memberName}</div>
+                                    <div className="text-xs text-gray-300">BIB: {record.memberId}</div>
+                                    <div className="md:hidden text-xs text-gray-400 mt-1">{record.teamName}</div>
+                                    <div className="md:hidden text-xs text-white mt-1">
+                                      {formatDate(record.startDate)} - {formatDate(record.endDate)}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap mobile-hidden" data-label="Tuần">
+                                <div className="text-xs md:text-sm text-white">
+                                  {formatDate(record.startDate)} - {formatDate(record.endDate)}
+                                </div>
+                              </td>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Tổng KM">
+                                <div className="text-xs md:text-sm font-bold text-orange-400">{record.totalKm.toFixed(2)} km</div>
+                                {hasAdjustment && (
+                                  <div className={`text-xs ${record.adjustmentKm! < 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                    Điều chỉnh: {record.adjustmentKm! > 0 ? '+' : ''}{record.adjustmentKm!.toFixed(2)} km
+                                  </div>
+                                )}
+                                {record.violationKm && record.violationKm > 0 && (
+                                  <div className="text-xs text-red-400 mt-1">Vi phạm: {record.violationKm.toFixed(2)} km</div>
+                                )}
+                              </td>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap mobile-hidden" data-label="Team">
+                                <div className="text-xs text-gray-300">{record.teamName}</div>
+                              </td>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Links">
+                                <div className="flex flex-col md:flex-row gap-1 md:gap-2">
+                                  <a
+                                    href={`https://84race.com/member/${record.memberId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center px-2 py-1 bg-blue-500/20 text-blue-300 rounded-md hover:bg-blue-500/30 transition-colors text-xs"
+                                  >
+                                    <span className="mr-1">🏃</span>
+                                    84Race
+                                  </a>
+                                  {user?.strava_id && (
+                                    <a
+                                      href={`https://www.strava.com/athletes/${user.strava_id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center px-2 py-1 bg-orange-500/20 text-orange-300 rounded-md hover:bg-orange-500/30 transition-colors text-xs"
+                                    >
+                                      <span className="mr-1">🔥</span>
+                                      Strava
+                                    </a>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {!weeklyLoading && weeklyRankings.length === 0 && (
+                  <div className="text-center py-12 md:py-16">
+                    <div className="text-3xl md:text-4xl mb-4">📊</div>
+                    <div className="text-base md:text-lg text-white font-semibold">Chưa có dữ liệu cho tuần này</div>
+                    <div className="text-sm text-gray-300 mt-2">Vui lòng chọn tuần khác</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!loading && isWeeklyTeam && (
+            <div className="space-y-4 md:space-y-6 pt-8 md:pt-20">
+              <div className="flex justify-center mb-4 md:mb-6">
+                <div className="backdrop-blur-md bg-white/10 rounded-xl p-1 border border-white/20 w-full max-w-sm md:max-w-none md:w-auto">
+                  <div className="flex flex-col sm:flex-row gap-1">
+                    <button
+                      onClick={() => setWeeklyTeamSortBy('total')}
+                      className={`px-4 py-2 md:px-6 md:py-2 rounded-lg font-semibold transition-all text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 flex-1 sm:flex-initial ${weeklyTeamSortBy === 'total' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:text-white'}`}
+                    >
+                      <span>📊</span> Tổng KM
+                    </button>
+                    <button
+                      onClick={() => setWeeklyTeamSortBy('average')}
+                      className={`px-4 py-2 md:px-6 md:py-2 rounded-lg font-semibold transition-all text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 flex-1 sm:flex-initial ${weeklyTeamSortBy === 'average' ? 'bg-orange-500 text-white' : 'text-gray-300 hover:text-white'}`}
+                    >
+                      <span>📈</span> KM Trung Bình
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {!weeklyTeamLoading && getSortedWeeklyTeams().length >= 3 && (
+                <div className="mb-6 md:mb-8">
+                  <div className="text-center mb-4 md:mb-6">
+                    <h3 className="text-sm md:text-lg lg:text-xl font-bold text-orange-400">
+                      🏆 Top 3 Team tuần {formatDate(formatDateForAPI(getMonday(new Date(selectedWeekTeamDate))))} - {formatDate(formatDateForAPI(getSunday(new Date(selectedWeekTeamDate))))}
+                    </h3>
+                  </div>
+                  
+                  <div className="block md:hidden space-y-3">
+                    {getSortedWeeklyTeams().slice(0, 3).map((team, index) => {
+                      const rank = index + 1;
+                      const rankStyle = getRankStyling(rank);
+                      return (
+                        <div key={team.teamName} className="backdrop-blur-md bg-white/10 rounded-xl p-4 border border-white/20">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-12 h-12 rounded-full ${rankStyle.bg} ${rankStyle.text} flex items-center justify-center`}>
+                              <span className="text-lg font-bold">{rankStyle.icon} {rank}</span>
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-bold text-white text-sm truncate">{team.teamName}</div>
+                              <div className="text-xs text-gray-300">{team.memberCount} thành viên</div>
+                              <div className="text-orange-400 text-sm font-semibold">
+                                {weeklyTeamSortBy === 'total' 
+                                  ? `${team.totalKm.toFixed(2)} km` 
+                                  : `${team.avgKm.toFixed(2)} km TB`
+                                }
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="hidden md:flex justify-center items-end gap-4 md:gap-6 h-80 md:h-96">
+                    {getSortedWeeklyTeams().slice(0, 3).map((team, index) => {
+                      const rank = index + 1;
+                      if (rank === 2) {
+                        return (
+                          <div key={team.teamName} className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                            <div className="relative mb-4 animate-float" style={{ animationDelay: '0.2s' }}>
+                              <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center border-4 border-white shadow-xl">
+                                <span className="text-xl md:text-2xl">👥</span>
+                              </div>
+                              <div className="absolute -top-2 -right-2 text-2xl md:text-3xl">🥈</div>
+                            </div>
+                            <div className="backdrop-blur-md bg-gray-300/20 rounded-2xl p-4 md:p-6 text-center h-32 md:h-40 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-gray-300/30">
+                              <div className="font-bold text-white text-sm md:text-lg truncate mb-2">{team.teamName}</div>
+                              <div className="text-xs md:text-sm text-gray-200 font-semibold">
+                                {weeklyTeamSortBy === 'total' 
+                                  ? `${team.totalKm.toFixed(2)} km` 
+                                  : `${team.avgKm.toFixed(2)} km TB`
+                                }
+                              </div>
+                              <div className="text-xs text-gray-300 mt-1">{team.memberCount} thành viên</div>
+                            </div>
+                            <div className="bg-gradient-to-b from-gray-300 to-gray-500 w-full h-24 md:h-28 rounded-b-2xl flex items-center justify-center shadow-lg">
+                              <span className="text-white font-bold text-2xl md:text-3xl">2</span>
+                            </div>
+                          </div>
+                        );
+                      } else if (rank === 1) {
+                        return (
+                          <div key={team.teamName} className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0s' }}>
+                            <div className="relative mb-4 animate-float">
+                              <div className="pulse-glow rounded-full p-1 bg-gradient-to-r from-yellow-400 to-orange-400">
+                                <div className="h-20 w-20 md:h-24 md:w-24 rounded-full bg-gradient-to-br from-yellow-400 to-orange-400 flex items-center justify-center border-4 border-white shadow-2xl">
+                                  <span className="text-2xl md:text-3xl">👥</span>
+                                </div>
+                              </div>
+                              <div className="absolute -top-3 -right-3 text-3xl md:text-4xl animate-bounce">👑</div>
+                            </div>
+                            <div className="backdrop-blur-md bg-gradient-to-br from-yellow-400/30 via-orange-400/30 to-yellow-400/30 rounded-2xl p-4 md:p-6 text-center h-40 md:h-48 w-48 md:w-56 flex flex-col justify-center shadow-2xl border-2 border-yellow-300/40 relative overflow-hidden">
+                              <div className="absolute inset-0 animate-shimmer"></div>
+                              <div className="relative z-10">
+                                <div className="text-lg md:text-2xl mb-2">🏆 CHAMPION</div>
+                                <div className="font-bold text-white text-base md:text-xl truncate mb-2">{team.teamName}</div>
+                                <div className="text-xs md:text-sm text-yellow-100 font-semibold">
+                                  {weeklyTeamSortBy === 'total' 
+                                    ? `${team.totalKm.toFixed(2)} km` 
+                                    : `${team.avgKm.toFixed(2)} km TB`
+                                  }
+                                </div>
+                                <div className="text-xs text-yellow-200 mt-1">{team.memberCount} thành viên</div>
+                              </div>
+                            </div>
+                            <div className="bg-gradient-to-b from-yellow-400 via-yellow-500 to-yellow-600 w-full h-32 md:h-40 rounded-b-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
+                              <div className="absolute inset-0 animate-shimmer"></div>
+                              <span className="text-white font-bold text-3xl md:text-4xl relative z-10">1</span>
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div key={team.teamName} className="flex flex-col items-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+                            <div className="relative mb-4 animate-float" style={{ animationDelay: '0.4s' }}>
+                              <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center border-4 border-white shadow-xl">
+                                <span className="text-xl md:text-2xl">👥</span>
+                              </div>
+                              <div className="absolute -top-2 -right-2 text-2xl md:text-3xl">🥉</div>
+                            </div>
+                            <div className="backdrop-blur-md bg-amber-600/20 rounded-2xl p-4 md:p-6 text-center h-28 md:h-36 w-44 md:w-52 flex flex-col justify-center shadow-xl border border-amber-500/30">
+                              <div className="font-bold text-white text-sm md:text-lg truncate mb-2">{team.teamName}</div>
+                              <div className="text-xs md:text-sm text-amber-200 font-semibold">
+                                {weeklyTeamSortBy === 'total' 
+                                  ? `${team.totalKm.toFixed(2)} km` 
+                                  : `${team.avgKm.toFixed(2)} km TB`
+                                }
+                              </div>
+                              <div className="text-xs text-amber-300 mt-1">{team.memberCount} thành viên</div>
+                            </div>
+                            <div className="bg-gradient-to-b from-amber-600 to-amber-800 w-full h-20 md:h-24 rounded-b-2xl flex items-center justify-center shadow-lg">
+                              <span className="text-white font-bold text-2xl md:text-3xl">3</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="overflow-hidden rounded-xl md:rounded-2xl backdrop-blur-md bg-white/10 border border-white/20 shadow-2xl">
+                {weeklyTeamLoading ? (
+                  <div className="flex flex-col items-center justify-center py-16 md:py-20">
+                    <div className="animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-4 border-gray-400 border-t-orange-400"></div>
+                    <div className="mt-4 text-white font-medium text-sm md:text-base">
+                      Đang tải dữ liệu team tuần {formatDate(formatDateForAPI(getMonday(new Date(selectedWeekTeamDate))))} - {formatDate(formatDateForAPI(getSunday(new Date(selectedWeekTeamDate))))}...
+                    </div>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full mobile-table">
+                      <thead className="backdrop-blur-sm bg-white/20">
+                        <tr>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">🏅 Hạng</th>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">👥 Team</th>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white mobile-hidden">👤 Thành viên</th>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white">📊 Tổng KM</th>
+                          <th className="px-3 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-bold text-white mobile-hidden">📈 KM TB</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/10">
+                        {getSortedWeeklyTeams().map((team, index) => {
+                          const rank = index + 1;
+                          const rankStyle = getRankStyling(rank);
+
+                          return (
+                            <tr key={team.teamName} className={`hover:bg-white/5 transition-colors ${rank <= 3 ? 'bg-white/5' : ''}`}>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Hạng">
+                                <div className={`inline-flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full ${rankStyle.bg} ${rankStyle.text} shadow-lg`}>
+                                  <span className="text-xs md:text-sm font-bold">{rankStyle.icon} {rank}</span>
+                                </div>
+                              </td>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Team">
+                                <div className="flex items-center">
+                                  <div className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center mr-2 md:mr-3 border-2 border-white/20 shadow-md">
+                                    <span className="text-sm md:text-xl">👥</span>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs md:text-sm font-semibold text-white truncate max-w-[120px] md:max-w-none">{team.teamName}</div>
+                                    <div className="md:hidden text-xs text-white mt-1">{team.memberCount} thành viên</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap mobile-hidden" data-label="Thành viên">
+                                <div className="text-xs md:text-sm font-semibold text-white">{team.memberCount}</div>
+                              </td>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Tổng KM">
+                                <div className="text-xs md:text-sm font-bold text-orange-400">{team.totalKm.toFixed(2)} km</div>
+                                <div className="md:hidden text-xs text-blue-400 mt-1">TB: {team.avgKm.toFixed(2)} km</div>
+                              </td>
+                              <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap mobile-hidden" data-label="KM TB">
+                                <div className="text-xs md:text-sm font-semibold text-blue-400">{team.avgKm.toFixed(2)} km</div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {!weeklyTeamLoading && weeklyTeamRankings.length === 0 && (
+                  <div className="text-center py-12 md:py-16">
+                    <div className="text-3xl md:text-4xl mb-4">🏆</div>
+                    <div className="text-base md:text-lg text-white font-semibold">Chưa có dữ liệu team cho tuần này</div>
+                    <div className="text-sm text-gray-300 mt-2">Vui lòng chọn tuần khác</div>
                   </div>
                 )}
               </div>

@@ -31,6 +31,115 @@ interface KmAdjustment {
   reason?: string;
 }
 
+// Helper function to parse date from activity
+const formatDateForComparison = (dateStr: string) => {
+  const datePart = dateStr.split(' ')[0];
+  const [day, month, year] = datePart.split('/');
+  return `${year}-${month}-${day}`;
+};
+
+// Helper function to check if we should continue pagination
+const shouldContinuePagination = (lastActivityDate: string, targetDate: string): boolean => {
+  const lastDate = new Date(lastActivityDate);
+  const target = new Date(targetDate);
+  return lastDate >= target;
+};
+
+// Function to scrape activities with pagination for a specific date
+async function scrapeActivitiesForDate(
+  memberId: number, 
+  targetDate: string
+): Promise<{ validKm: number; violationKm: number }> {
+  let totalValidKm = 0;
+  let totalViolationKm = 0;
+  let page = 1;
+  let shouldContinue = true;
+
+  while (shouldContinue) {
+    try {
+      console.log(`Scraping member ${memberId} page ${page} for date ${targetDate}...`);
+      
+      const response = await axios.post(
+        `https://84race.com/personal/get_data_post/activities/${memberId}`,
+        `page=${page}&listCateId=`,
+        {
+          timeout: 10000,
+          headers: {
+            'accept': 'text/html, */*; q=0.01',
+            'accept-language': 'vi,en-US;q=0.9,en;q=0.8',
+            'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'origin': 'https://84race.com',
+            'referer': `https://84race.com/member/${memberId}`,
+            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+            'x-requested-with': 'XMLHttpRequest'
+          }
+        }
+      );
+
+      const $ = cheerio.load(response.data);
+      const posts = $('.post');
+      
+      if (posts.length === 0) {
+        console.log(`Member ${memberId}: No more activities on page ${page}`);
+        shouldContinue = false;
+        break;
+      }
+
+      let lastActivityDate = '';
+
+      posts.each((i, post) => {
+        const timeText = $(post).find('time').text().trim();
+        
+        if (timeText) {
+          const activityDate = formatDateForComparison(timeText);
+          lastActivityDate = activityDate;
+          
+          if (activityDate === targetDate) {
+            const distanceText = $(post).find('.cell').first().find('.ibl').first().text().trim();
+            const kmMatch = distanceText.match(/([\d.]+)\s*km/);
+            
+            if (kmMatch) {
+              const km = parseFloat(kmMatch[1]);
+              const activityNameElement = $(post).find('h4.name.ellipsis');
+              const hasViolation = activityNameElement.hasClass('text-danger');
+              
+              if (hasViolation) {
+                totalViolationKm += km;
+                console.log(`Member ${memberId}: Found VIOLATION ${km} km on ${activityDate} - NOT COUNTED`);
+              } else {
+                totalValidKm += km;
+                console.log(`Member ${memberId}: Found ${km} km on ${activityDate}`);
+              }
+            }
+          }
+        }
+      });
+
+      // Check if we should continue to next page
+      if (lastActivityDate && !shouldContinuePagination(lastActivityDate, targetDate)) {
+        console.log(`Member ${memberId}: Last activity date ${lastActivityDate} is before target date ${targetDate}, stopping pagination`);
+        shouldContinue = false;
+      } else if (lastActivityDate) {
+        page++;
+      } else {
+        shouldContinue = false;
+      }
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Error scraping member ${memberId} page ${page}:`, errorMessage);
+      shouldContinue = false;
+    }
+  }
+
+  console.log(`Member ${memberId}: Scraped ${page} pages, Total VALID ${totalValidKm} km, VIOLATION ${totalViolationKm} km on ${targetDate}`);
+
+  return {
+    validKm: totalValidKm,
+    violationKm: totalViolationKm
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as RequestBody;
@@ -50,63 +159,13 @@ export async function POST(request: NextRequest) {
     const results = await Promise.all(
       memberIds.map(async (memberId: number): Promise<DailyKmResult> => {
         try {
-          console.log(`Scraping member ${memberId}...`);
-          const response = await axios.get(`https://84race.com/member/${memberId}`, {
-            timeout: 10000,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-          });
-          
-          const $ = cheerio.load(response.data);
-          let kmForDate = 0;
-          let violationKm = 0;
-          
-          // Parse date format: "22/09/2025 07:47:41 (GMT+7)"
-          const formatDateForComparison = (dateStr: string) => {
-            const datePart = dateStr.split(' ')[0];
-            const [day, month, year] = datePart.split('/');
-            return `${year}-${month}-${day}`;
-          };
-
-          $('.post').each((i, post) => {
-            const timeText = $(post).find('time').text().trim();
-            
-            if (timeText) {
-              const activityDate = formatDateForComparison(timeText);
-              
-              if (activityDate === targetDate) {
-                const distanceText = $(post).find('.cell').first().find('.ibl').first().text().trim();
-                const kmMatch = distanceText.match(/([\d.]+)\s*km/);
-                
-                if (kmMatch) {
-                  const km = parseFloat(kmMatch[1]);
-                  
-                  // Kiểm tra xem activity có bị vi phạm không (có class text-danger)
-                  const activityNameElement = $(post).find('h4.name.ellipsis');
-                  const hasViolation = activityNameElement.hasClass('text-danger');
-                  
-                  if (hasViolation) {
-                    // Nếu có vi phạm, không cộng vào tổng km
-                    violationKm += km;
-                    console.log(`Member ${memberId}: Found VIOLATION ${km} km on ${activityDate} - NOT COUNTED`);
-                  } else {
-                    // Chỉ cộng km hợp lệ
-                    kmForDate += km;
-                    console.log(`Member ${memberId}: Found ${km} km on ${activityDate}`);
-                  }
-                }
-              }
-            }
-          });
-
-          console.log(`Member ${memberId}: Total VALID ${kmForDate} km, VIOLATION ${violationKm} km on ${targetDate}`);
+          const { validKm, violationKm } = await scrapeActivitiesForDate(memberId, targetDate);
 
           return {
             memberId,
             date: targetDate,
-            km: kmForDate,
-            originalKm: kmForDate,
+            km: validKm,
+            originalKm: validKm,
             violationKm: violationKm
           };
         } catch (error) {
