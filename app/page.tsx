@@ -1260,7 +1260,7 @@ export default function App() {
                             </td>
                             <td className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap" data-label="Quãng đường">
                               <div className="text-xs md:text-sm font-semibold text-white">{totalKm.toFixed(2)} km</div>
-                              {hasAdjustment && (
+                              {hasAdjustment && member.bib_number != 312005 && (
                                 <div className={`text-xs ${member.adjustment_km! < 0 ? 'text-red-400' : 'text-green-400'}`}>
                                   Điều chỉnh: {member.adjustment_km! > 0 ? '+' : ''}{member.adjustment_km!.toFixed(2)} km
                                 </div>

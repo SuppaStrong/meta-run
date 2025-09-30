@@ -437,5 +437,23 @@
     "member_id": "574566",
     "strava_id": "184123539",
     "team_name": "HCNS"
+  },
+  {
+    "stt": 56,
+    "name": "Manh Ua",
+    "gender": "male",
+    "member_id": "138879",
+    "strava_id": "186009243",
+    "team_name": "UA Marketing 02",
+    "ban" : true
+  },
+  {
+    "stt": 57,
+    "name": "Viet beo",
+    "gender": "male",
+    "member_id": "193523",
+    "strava_id": "186278513",
+    "team_name": "null",
+    "ban": true
   }
 ]

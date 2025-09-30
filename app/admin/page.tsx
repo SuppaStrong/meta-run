@@ -17,6 +17,7 @@ export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [adjustments, setAdjustments] = useState<KmAdjustment[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>('');
   const [formData, setFormData] = useState({
     bibNumber: '',
     date: new Date().toISOString().split('T')[0],
@@ -24,10 +25,9 @@ export default function AdminPage() {
     reason: ''
   });
 
-  const ADMIN_PASSWORD = 'meta@2025'; // Thay đổi password này!
+  const ADMIN_PASSWORD = 'meta@2025';
 
   useEffect(() => {
-    // Check if already logged in (stored in sessionStorage)
     const auth = sessionStorage.getItem('adminAuth');
     if (auth === 'true') {
       setIsAuthenticated(true);
@@ -53,12 +53,29 @@ export default function AdminPage() {
 
   const fetchAdjustments = async () => {
     setLoading(true);
+    setError('');
     try {
-      const response = await fetch('/api/km-adjustments');
+      console.log('[Admin] Fetching adjustments...');
+      const response = await fetch('/api/km-adjustments', {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
+      console.log('[Admin] Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log('[Admin] Loaded adjustments:', data.length);
       setAdjustments(data);
     } catch (error) {
-      console.error('Error fetching adjustments:', error);
+      console.error('[Admin] Error fetching adjustments:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      setError(`Lỗi khi tải danh sách: ${errorMsg}`);
       alert('Lỗi khi tải danh sách điều chỉnh');
     } finally {
       setLoading(false);
@@ -72,10 +89,16 @@ export default function AdminPage() {
     }
 
     setLoading(true);
+    setError('');
     try {
+      console.log('[Admin] Submitting adjustment:', formData);
+      
       const response = await fetch('/api/km-adjustments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
         body: JSON.stringify({
           bibNumber: parseInt(formData.bibNumber),
           date: formData.date,
@@ -84,21 +107,29 @@ export default function AdminPage() {
         })
       });
 
+      console.log('[Admin] Submit response status:', response.status);
+
       if (response.ok) {
+        const result = await response.json();
+        console.log('[Admin] Added adjustment:', result);
+        
         setFormData({
           bibNumber: '',
           date: new Date().toISOString().split('T')[0],
           adjustmentKm: '',
           reason: ''
         });
-        fetchAdjustments();
+        await fetchAdjustments();
         alert('Đã thêm điều chỉnh thành công');
       } else {
-        alert('Lỗi khi thêm điều chỉnh');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Unknown error');
       }
     } catch (error) {
-      console.error('Error adding adjustment:', error);
-      alert('Lỗi khi thêm điều chỉnh');
+      console.error('[Admin] Error adding adjustment:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      setError(`Lỗi khi thêm: ${errorMsg}`);
+      alert(`Lỗi khi thêm điều chỉnh: ${errorMsg}`);
     } finally {
       setLoading(false);
     }
@@ -108,20 +139,32 @@ export default function AdminPage() {
     if (!confirm('Bạn có chắc muốn xóa điều chỉnh này?')) return;
 
     setLoading(true);
+    setError('');
     try {
+      console.log('[Admin] Deleting adjustment:', id);
+      
       const response = await fetch(`/api/km-adjustments?id=${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
       });
 
+      console.log('[Admin] Delete response status:', response.status);
+
       if (response.ok) {
-        fetchAdjustments();
+        console.log('[Admin] Deleted successfully');
+        await fetchAdjustments();
         alert('Đã xóa điều chỉnh');
       } else {
-        alert('Lỗi khi xóa điều chỉnh');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Unknown error');
       }
     } catch (error) {
-      console.error('Error deleting adjustment:', error);
-      alert('Lỗi khi xóa điều chỉnh');
+      console.error('[Admin] Error deleting adjustment:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      setError(`Lỗi khi xóa: ${errorMsg}`);
+      alert(`Lỗi khi xóa điều chỉnh: ${errorMsg}`);
     } finally {
       setLoading(false);
     }
@@ -132,7 +175,6 @@ export default function AdminPage() {
     return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  // Login screen
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center p-4">
@@ -169,11 +211,9 @@ export default function AdminPage() {
     );
   }
 
-  // Admin dashboard
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white p-2 md:p-8">
       <div className="max-w-6xl mx-auto">
-        {/* Header with logout */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold mb-2 bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">
@@ -197,7 +237,12 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Form thêm điều chỉnh */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300">
+            ⚠️ {error}
+          </div>
+        )}
+
         <div className="backdrop-blur-md bg-white/10 rounded-2xl p-4 md:p-6 border border-white/20 shadow-xl mb-6 md:mb-8">
           <h2 className="text-lg md:text-xl font-bold mb-4">➕ Thêm Điều chỉnh Mới</h2>
           <div className="space-y-4">
@@ -257,10 +302,16 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Danh sách điều chỉnh */}
         <div className="backdrop-blur-md bg-white/10 rounded-2xl border border-white/20 shadow-xl overflow-hidden">
-          <div className="p-4 md:p-6 border-b border-white/20">
-            <h2 className="text-lg md:text-xl font-bold">📋 Danh sách Điều chỉnh</h2>
+          <div className="p-4 md:p-6 border-b border-white/20 flex justify-between items-center">
+            <h2 className="text-lg md:text-xl font-bold">📋 Danh sách Điều chỉnh ({adjustments.length})</h2>
+            <button
+              onClick={fetchAdjustments}
+              disabled={loading}
+              className="px-3 py-1 md:px-4 md:py-2 bg-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500/30 transition-colors text-sm disabled:opacity-50"
+            >
+              🔄 Refresh
+            </button>
           </div>
           
           {loading && adjustments.length === 0 ? (
@@ -274,7 +325,6 @@ export default function AdminPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              {/* Mobile card layout */}
               <div className="md:hidden">
                 {adjustments.map((adj) => (
                   <div key={adj.id} className="p-4 border-b border-white/10 last:border-b-0">
@@ -311,7 +361,6 @@ export default function AdminPage() {
                 ))}
               </div>
 
-              {/* Desktop table */}
               <table className="w-full hidden md:table">
                 <thead className="bg-white/5">
                   <tr>
@@ -358,15 +407,14 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* Hướng dẫn */}
         <div className="mt-6 md:mt-8 backdrop-blur-md bg-blue-500/10 rounded-2xl p-4 md:p-6 border border-blue-500/20">
           <h3 className="text-base md:text-lg font-bold mb-3 text-blue-400">💡 Hướng dẫn sử dụng</h3>
           <ul className="space-y-2 text-gray-300 text-sm md:text-base">
             <li>• <strong>Số âm (-30)</strong>: Trừ đi km vi phạm của vận động viên</li>
             <li>• <strong>Số dương (+20)</strong>: Thêm km (nếu cần)</li>
-            <li>• Điều chỉnh sẽ tự động áp dụng vào Daily Rankings</li>
+            <li>• Điều chỉnh sẽ tự động áp dụng vào tất cả Rankings</li>
             <li>• BIB Number là số BIB của vận động viên trong hệ thống</li>
-            <li>• <strong>Lưu ý mới:</strong> Activities có class text-danger đã được tự động loại bỏ khỏi tổng km</li>
+            <li>• <strong>Lưu ý:</strong> Activities có class text-danger đã được tự động loại bỏ khỏi tổng km</li>
           </ul>
         </div>
       </div>

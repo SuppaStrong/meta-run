@@ -9,36 +9,42 @@ export interface KmAdjustment {
   createdAt: string;
 }
 
-// In-memory storage (sẽ mất khi restart server)
-// Trong production, nên dùng database
 let adjustments: KmAdjustment[] = [];
 
-// GET - Lấy tất cả adjustments
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const date = searchParams.get('date');
-  const bibNumber = searchParams.get('bibNumber');
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const date = searchParams.get('date');
+    const bibNumber = searchParams.get('bibNumber');
 
-  let filtered = adjustments;
+    let filtered = adjustments;
 
-  if (date) {
-    filtered = filtered.filter(adj => adj.date === date);
+    if (date) {
+      filtered = filtered.filter(adj => adj.date === date);
+    }
+
+    if (bibNumber) {
+      filtered = filtered.filter(adj => adj.bibNumber === parseInt(bibNumber));
+    }
+
+    console.log(`[KM Adjustments GET] Returning ${filtered.length} adjustments (total: ${adjustments.length})`);
+    return NextResponse.json(filtered);
+  } catch (error) {
+    console.error('[KM Adjustments GET] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
-
-  if (bibNumber) {
-    filtered = filtered.filter(adj => adj.bibNumber === parseInt(bibNumber));
-  }
-
-  return NextResponse.json(filtered);
 }
 
-// POST - Thêm adjustment mới
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { bibNumber, date, adjustmentKm, reason } = body;
 
+    console.log('[KM Adjustments POST] Received:', { bibNumber, date, adjustmentKm, reason });
+
     if (!bibNumber || !date || adjustmentKm === undefined) {
+      console.error('[KM Adjustments POST] Missing required fields');
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -55,19 +61,22 @@ export async function POST(request: NextRequest) {
     };
 
     adjustments.push(newAdjustment);
+    console.log(`[KM Adjustments POST] Added adjustment. Total count: ${adjustments.length}`);
 
     return NextResponse.json(newAdjustment);
   } catch (error) {
+    console.error('[KM Adjustments POST] Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
 
-// DELETE - Xóa adjustment
 export async function DELETE(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const id = searchParams.get('id');
+
+    console.log('[KM Adjustments DELETE] Deleting ID:', id);
 
     if (!id) {
       return NextResponse.json(
@@ -80,14 +89,17 @@ export async function DELETE(request: NextRequest) {
     adjustments = adjustments.filter(adj => adj.id !== id);
 
     if (adjustments.length === initialLength) {
+      console.error('[KM Adjustments DELETE] Adjustment not found');
       return NextResponse.json(
         { error: 'Adjustment not found' },
         { status: 404 }
       );
     }
 
+    console.log(`[KM Adjustments DELETE] Deleted. Total count: ${adjustments.length}`);
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error('[KM Adjustments DELETE] Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }

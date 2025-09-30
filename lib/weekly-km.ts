@@ -25,6 +25,7 @@ export interface UserData {
   team_name?: string;
   gender: string;
   strava_id?: string;
+  ban?: boolean;
 }
 
 interface KmAdjustment {
@@ -34,21 +35,18 @@ interface KmAdjustment {
   reason?: string;
 }
 
-// Helper to format date
 const formatDateForComparison = (dateStr: string) => {
   const datePart = dateStr.split(' ')[0];
   const [day, month, year] = datePart.split('/');
   return `${year}-${month}-${day}`;
 };
 
-// Helper to check pagination
 const shouldContinuePagination = (lastActivityDate: string, startDate: string): boolean => {
   const lastDate = new Date(lastActivityDate);
   const targetDate = new Date(startDate);
   return lastDate >= targetDate;
 };
 
-// Main scraping function
 async function scrapeActivitiesWithPagination(
   memberId: number,
   startDate: string,
@@ -147,7 +145,64 @@ async function scrapeActivitiesWithPagination(
   return { validKm: totalValidKm, violationKm: totalViolationKm, dailyBreakdown: dailyData };
 }
 
-// ✅ Main export function
+export async function scrapeTotalKmForBannedUser(memberId: number): Promise<number> {
+  let totalValidKm = 0;
+  let page = 1;
+  let shouldContinue = true;
+
+  while (shouldContinue) {
+    try {
+      const response = await axios.post(
+        `https://84race.com/personal/get_data_post/activities/${memberId}`,
+        `page=${page}&listCateId=`,
+        {
+          timeout: 15000,
+          headers: {
+            'accept': 'text/html, */*; q=0.01',
+            'accept-language': 'vi,en-US;q=0.9,en;q=0.8',
+            'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'origin': 'https://84race.com',
+            'referer': `https://84race.com/member/${memberId}`,
+            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+            'x-requested-with': 'XMLHttpRequest'
+          }
+        }
+      );
+
+      const $ = cheerio.load(response.data);
+      const posts = $('.post');
+
+      if (posts.length === 0) {
+        shouldContinue = false;
+        break;
+      }
+
+      posts.each((i, post) => {
+        const distanceText = $(post).find('.cell').first().find('.ibl').first().text().trim();
+        const kmMatch = distanceText.match(/([\d.]+)\s*km/);
+
+        if (kmMatch) {
+          const km = parseFloat(kmMatch[1]);
+          const activityNameElement = $(post).find('h4.name.ellipsis');
+          const hasViolation = activityNameElement.hasClass('text-danger');
+
+          if (!hasViolation) {
+            totalValidKm += km;
+          }
+        }
+      });
+
+      page++;
+      if (page > 50) shouldContinue = false;
+    } catch (error) {
+      console.error(`Error scraping banned user ${memberId} page ${page}:`, error);
+      shouldContinue = false;
+    }
+  }
+
+  return totalValidKm;
+}
+
 export async function calculateWeeklyKm(
   memberIds: number[],
   startDate: string,
@@ -203,14 +258,12 @@ export async function calculateWeeklyKm(
   return results;
 }
 
-// ✅ Function to load users from file system
 export async function loadUsersFromFile(): Promise<UserData[]> {
   const filePath = path.join(process.cwd(), 'public', 'user.json');
   const fileContents = await fs.readFile(filePath, 'utf8');
   return JSON.parse(fileContents);
 }
 
-// ✅ Function to apply adjustments
 export async function applyAdjustments(
   results: WeeklyMemberKm[],
   startDate: string,
@@ -224,7 +277,6 @@ export async function applyAdjustments(
       dates.push(d.toISOString().split('T')[0]);
     }
 
-    // Get base URL for internal fetch
     const baseUrl = getBaseUrl();
     
     const adjustmentPromises = dates.map(date =>
@@ -261,7 +313,6 @@ export async function applyAdjustments(
   return results;
 }
 
-// Helper to get base URL
 function getBaseUrl(): string {
   if (process.env.NEXT_PUBLIC_BASE_URL) {
     return process.env.NEXT_PUBLIC_BASE_URL;

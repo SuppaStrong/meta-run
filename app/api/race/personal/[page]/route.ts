@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
+import { loadUsersFromFile, scrapeTotalKmForBannedUser, UserData } from '@/lib/weekly-km';
 
 interface KmAdjustment {
   bibNumber: number;
@@ -15,6 +16,9 @@ interface Member {
   original_km?: number;
   adjustment_km?: number;
   order: number;
+  full_name?: string;
+  team_name?: string;
+  avatar?: string;
   [key: string]: unknown;
 }
 
@@ -24,6 +28,19 @@ interface RaceData {
     [key: string]: unknown;
   };
   [key: string]: unknown;
+}
+
+const bannedUsersCache = new Map<number, { km: number; timestamp: number }>();
+const BANNED_CACHE_DURATION = 60 * 60 * 1000;
+
+function getBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_BASE_URL) {
+    return process.env.NEXT_PUBLIC_BASE_URL;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  return 'http://localhost:3000';
 }
 
 export async function GET(
@@ -41,6 +58,8 @@ export async function GET(
   };
   
   try {
+    console.log(`[Personal Rankings] Fetching page ${page}`);
+    
     const response = await axios.get(
       `https://84race.com/api/v1/races/detail/16790/ranking_personal/${page}`, 
       { headers }
@@ -48,57 +67,101 @@ export async function GET(
     
     const data = response.data as RaceData;
     
-    // Fetch all adjustments and calculate total per member
+    const memberAdjustments = new Map<number, number>();
+    
     try {
-      const adjustmentsResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/km-adjustments`,
-        { cache: 'no-store' }
-      );
+      const baseUrl = getBaseUrl();
+      const adjustmentsResponse = await fetch(`${baseUrl}/api/km-adjustments`, { cache: 'no-store' });
       
       if (adjustmentsResponse.ok) {
         const allAdjustments: KmAdjustment[] = await adjustmentsResponse.json();
+        console.log(`[Personal] Loaded ${allAdjustments.length} adjustments:`, allAdjustments);
         
-        // Group adjustments by bibNumber and calculate total
-        const memberAdjustments = new Map<number, number>();
         allAdjustments.forEach(adj => {
           const current = memberAdjustments.get(adj.bibNumber) || 0;
           memberAdjustments.set(adj.bibNumber, current + adj.adjustmentKm);
+          console.log(`[Personal] Map adjustment: BIB ${adj.bibNumber} => ${current + adj.adjustmentKm} km`);
         });
-        
-        // Apply adjustments to members
-        if (data?.data?.members) {
-          data.data.members = data.data.members.map((member: Member) => {
-            const bibNumber = member.bib_number || member.id;
-            const adjustment = memberAdjustments.get(bibNumber);
-            
-            if (adjustment) {
-              const originalKm = parseFloat(member.final_value || '0');
-              const adjustedKm = Math.max(0, originalKm + adjustment);
-              
-              return {
-                ...member,
-                original_km: originalKm,
-                adjustment_km: adjustment,
-                final_value: adjustedKm.toString()
-              };
-            }
-            
-            return member;
-          });
-          
-          // Re-sort by final_value descending
-          data.data.members.sort((a: Member, b: Member) => 
-            parseFloat(b.final_value) - parseFloat(a.final_value)
-          );
-          
-          // Update order after sorting
-          data.data.members.forEach((member: Member, index: number) => {
-            member.order = index + 1;
-          });
-        }
       }
     } catch (error) {
-      console.error('Error applying adjustments to personal rankings:', error);
+      console.error('Error fetching adjustments:', error);
+    }
+
+    try {
+      const users: UserData[] = await loadUsersFromFile();
+      const bannedUsers = users.filter(u => u.ban === true);
+
+      if (bannedUsers.length > 0 && data?.data?.members) {
+        const bannedMembers: Member[] = [];
+
+        for (const user of bannedUsers) {
+          const memberId = parseInt(user.member_id);
+          let totalKm = 0;
+
+          const cached = bannedUsersCache.get(memberId);
+          if (cached && Date.now() - cached.timestamp < BANNED_CACHE_DURATION) {
+            totalKm = cached.km;
+          } else {
+            totalKm = await scrapeTotalKmForBannedUser(memberId);
+            bannedUsersCache.set(memberId, { km: totalKm, timestamp: Date.now() });
+          }
+
+          bannedMembers.push({
+            id: memberId,
+            bib_number: memberId,
+            full_name: user.name,
+            team_name: user.team_name === 'null' ? undefined : user.team_name,
+            avatar: '/meta.png',
+            final_value: totalKm.toString(),
+            percent_finish: '0',
+            order: 0,
+            hangmuc_name: '',
+            note: '',
+            update_time: new Date().toISOString()
+          });
+        }
+
+        console.log(`[Personal] Adding ${bannedMembers.length} banned users`);
+        data.data.members = [...data.data.members, ...bannedMembers];
+      }
+    } catch (error) {
+      console.error('Error adding banned users to personal rankings:', error);
+    }
+
+    if (data?.data?.members) {
+      console.log(`[Personal] Applying adjustments to ${data.data.members.length} members`);
+      
+      data.data.members = data.data.members.map((member: Member) => {
+        const bibNumber = parseInt(String(member.bib_number || member.id));
+        const adjustment = memberAdjustments.get(bibNumber);
+        
+        if (adjustment) {
+          const originalKm = parseFloat(member.final_value || '0');
+          const adjustedKm = Math.max(0, originalKm + adjustment);
+          
+          console.log(`[Personal] Applied adjustment to BIB ${bibNumber}: ${originalKm} + (${adjustment}) = ${adjustedKm}`);
+          
+          return {
+            ...member,
+            original_km: originalKm,
+            adjustment_km: adjustment,
+            final_value: adjustedKm.toString()
+          };
+        }
+        
+        return member;
+      });
+      
+      console.log(`[Personal] Sorting and re-ranking...`);
+      data.data.members.sort((a: Member, b: Member) => 
+        parseFloat(b.final_value) - parseFloat(a.final_value)
+      );
+      
+      data.data.members.forEach((member: Member, index: number) => {
+        member.order = index + 1;
+      });
+      
+      console.log(`[Personal] Final member count: ${data.data.members.length}`);
     }
     
     return NextResponse.json(data);

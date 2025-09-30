@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import { loadUsersFromFile, UserData } from '@/lib/weekly-km';
 
 const dailyCache = new Map<string, CacheEntry>();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 5 * 60 * 1000;
 
 interface CacheEntry {
   data: DailyKmResult[];
@@ -16,7 +17,7 @@ interface DailyKmResult {
   km: number;
   originalKm?: number;
   adjustmentKm?: number;
-  violationKm?: number; 
+  violationKm?: number;
 }
 
 interface RequestBody {
@@ -31,21 +32,18 @@ interface KmAdjustment {
   reason?: string;
 }
 
-// Helper function to parse date from activity
 const formatDateForComparison = (dateStr: string) => {
   const datePart = dateStr.split(' ')[0];
   const [day, month, year] = datePart.split('/');
   return `${year}-${month}-${day}`;
 };
 
-// Helper function to check if we should continue pagination
 const shouldContinuePagination = (lastActivityDate: string, targetDate: string): boolean => {
   const lastDate = new Date(lastActivityDate);
   const target = new Date(targetDate);
   return lastDate >= target;
 };
 
-// Function to scrape activities with pagination for a specific date
 async function scrapeActivitiesForDate(
   memberId: number, 
   targetDate: string
@@ -57,8 +55,6 @@ async function scrapeActivitiesForDate(
 
   while (shouldContinue) {
     try {
-      console.log(`Scraping member ${memberId} page ${page} for date ${targetDate}...`);
-      
       const response = await axios.post(
         `https://84race.com/personal/get_data_post/activities/${memberId}`,
         `page=${page}&listCateId=`,
@@ -80,7 +76,6 @@ async function scrapeActivitiesForDate(
       const posts = $('.post');
       
       if (posts.length === 0) {
-        console.log(`Member ${memberId}: No more activities on page ${page}`);
         shouldContinue = false;
         break;
       }
@@ -105,19 +100,15 @@ async function scrapeActivitiesForDate(
               
               if (hasViolation) {
                 totalViolationKm += km;
-                console.log(`Member ${memberId}: Found VIOLATION ${km} km on ${activityDate} - NOT COUNTED`);
               } else {
                 totalValidKm += km;
-                console.log(`Member ${memberId}: Found ${km} km on ${activityDate}`);
               }
             }
           }
         }
       });
 
-      // Check if we should continue to next page
       if (lastActivityDate && !shouldContinuePagination(lastActivityDate, targetDate)) {
-        console.log(`Member ${memberId}: Last activity date ${lastActivityDate} is before target date ${targetDate}, stopping pagination`);
         shouldContinue = false;
       } else if (lastActivityDate) {
         page++;
@@ -132,8 +123,6 @@ async function scrapeActivitiesForDate(
     }
   }
 
-  console.log(`Member ${memberId}: Scraped ${page} pages, Total VALID ${totalValidKm} km, VIOLATION ${totalViolationKm} km on ${targetDate}`);
-
   return {
     validKm: totalValidKm,
     violationKm: totalViolationKm
@@ -147,14 +136,10 @@ export async function POST(request: NextRequest) {
     const targetDate = date || new Date().toISOString().split('T')[0];
     const cacheKey = `daily_${targetDate}`;
 
-    // Check cache
     const cached = dailyCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-      console.log('Returning cached data for', targetDate);
       return NextResponse.json(cached.data);
     }
-
-    console.log(`Fetching daily km for ${memberIds.length} members on ${targetDate}`);
 
     const results = await Promise.all(
       memberIds.map(async (memberId: number): Promise<DailyKmResult> => {
@@ -182,7 +167,28 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    // Fetch adjustments for this date
+    try {
+      const users: UserData[] = await loadUsersFromFile();
+      const bannedUsers = users.filter(u => u.ban === true);
+
+      if (bannedUsers.length > 0) {
+        for (const user of bannedUsers) {
+          const memberId = parseInt(user.member_id);
+          const { validKm, violationKm } = await scrapeActivitiesForDate(memberId, targetDate);
+          
+          results.push({
+            memberId,
+            date: targetDate,
+            km: validKm,
+            originalKm: validKm,
+            violationKm: violationKm
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error adding banned users to daily rankings:', error);
+    }
+
     try {
       const adjustmentsResponse = await fetch(
         `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/km-adjustments?date=${targetDate}`,
@@ -191,6 +197,7 @@ export async function POST(request: NextRequest) {
       
       if (adjustmentsResponse.ok) {
         const adjustments: KmAdjustment[] = await adjustmentsResponse.json();
+        console.log(`[Daily] Loaded ${adjustments.length} adjustments for date ${targetDate}`);
         
         results.forEach(result => {
           const adjustment = adjustments.find(
@@ -200,7 +207,7 @@ export async function POST(request: NextRequest) {
           if (adjustment) {
             result.adjustmentKm = adjustment.adjustmentKm;
             result.km = Math.max(0, result.originalKm! + adjustment.adjustmentKm);
-            console.log(`Applied adjustment to member ${result.memberId}: ${adjustment.adjustmentKm} km`);
+            console.log(`[Daily] Applied adjustment to BIB ${result.memberId}: ${result.originalKm} + (${adjustment.adjustmentKm}) = ${result.km}`);
           }
         });
       }
@@ -208,16 +215,13 @@ export async function POST(request: NextRequest) {
       console.error('Error fetching adjustments:', error);
     }
 
-    // Sort by km descending
     results.sort((a, b) => b.km - a.km);
     
-    // Cache the results
     dailyCache.set(cacheKey, {
       data: results,
       timestamp: Date.now()
     });
 
-    console.log(`Successfully fetched data for ${results.length} members`);
     return NextResponse.json(results);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
