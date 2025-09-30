@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv'; // ← Đổi từ '@vercel/kv' thành '@/lib/kv'
 
 export interface KmAdjustment {
   id: string;
