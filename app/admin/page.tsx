@@ -217,7 +217,7 @@ export default function AdminPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold mb-2 bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">
-              🔧 Admin - Quản lý Điều chỉnh KM
+              🔧 Admin - Quản lý Điều chỉnh Km
             </h1>
             <p className="text-gray-400 text-sm md:text-base">Thêm/xóa điều chỉnh km cho các vận động viên</p>
           </div>
