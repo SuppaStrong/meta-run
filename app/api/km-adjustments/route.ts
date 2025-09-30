@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { kv } from '@vercel/kv';
 
 export interface KmAdjustment {
   id: string;
@@ -11,57 +10,8 @@ export interface KmAdjustment {
   createdAt: string;
 }
 
-// Đường dẫn đến file JSON trong public/data
-const ADJUSTMENTS_FILE = path.join(process.cwd(), 'public', 'data', 'adjustments.json');
-
-/**
- * Đọc adjustments từ file JSON
- */
-async function readAdjustments(): Promise<KmAdjustment[]> {
-  try {
-    // Đảm bảo folder tồn tại
-    const dir = path.dirname(ADJUSTMENTS_FILE);
-    await fs.mkdir(dir, { recursive: true });
-
-    // Đọc file
-    const data = await fs.readFile(ADJUSTMENTS_FILE, 'utf8');
-    const adjustments = JSON.parse(data);
-    
-    console.log(`[readAdjustments] Successfully read ${adjustments.length} adjustments`);
-    return adjustments;
-  } catch (error) {
-    // Nếu file chưa tồn tại hoặc lỗi, trả về mảng rỗng
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      console.log('[readAdjustments] File not found, returning empty array');
-      return [];
-    }
-    console.error('[readAdjustments] Error:', error);
-    return [];
-  }
-}
-
-/**
- * Ghi adjustments vào file JSON
- */
-async function writeAdjustments(adjustments: KmAdjustment[]): Promise<void> {
-  try {
-    // Đảm bảo folder tồn tại
-    const dir = path.dirname(ADJUSTMENTS_FILE);
-    await fs.mkdir(dir, { recursive: true });
-
-    // Ghi file với format đẹp
-    await fs.writeFile(
-      ADJUSTMENTS_FILE, 
-      JSON.stringify(adjustments, null, 2),
-      'utf8'
-    );
-    
-    console.log(`[writeAdjustments] Successfully wrote ${adjustments.length} adjustments`);
-  } catch (error) {
-    console.error('[writeAdjustments] Error:', error);
-    throw error;
-  }
-}
+// Key để lưu trong KV store
+const ADJUSTMENTS_KEY = 'km_adjustments';
 
 /**
  * GET - Lấy danh sách adjustments
@@ -72,8 +22,8 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date');
     const bibNumber = searchParams.get('bibNumber');
 
-    // Đọc tất cả adjustments - DÙNG CONST thay vì LET
-    const adjustments = await readAdjustments();
+    // Đọc từ KV store
+    const adjustments: KmAdjustment[] = await kv.get(ADJUSTMENTS_KEY) || [];
     let filtered = adjustments;
 
     // Filter theo date nếu có
@@ -116,8 +66,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Đọc adjustments hiện tại
-    const adjustments = await readAdjustments();
+    // Đọc adjustments hiện tại từ KV
+    const adjustments: KmAdjustment[] = await kv.get(ADJUSTMENTS_KEY) || [];
 
     // Tạo adjustment mới
     const newAdjustment: KmAdjustment = {
@@ -132,8 +82,8 @@ export async function POST(request: NextRequest) {
     // Thêm vào mảng
     adjustments.push(newAdjustment);
     
-    // Ghi vào file
-    await writeAdjustments(adjustments);
+    // Ghi vào KV store
+    await kv.set(ADJUSTMENTS_KEY, adjustments);
 
     console.log(`[POST] Added adjustment. Total count: ${adjustments.length}`);
     console.log('[POST] New adjustment:', newAdjustment);
@@ -163,8 +113,8 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Đọc adjustments hiện tại
-    let adjustments = await readAdjustments();
+    // Đọc adjustments hiện tại từ KV
+    let adjustments: KmAdjustment[] = await kv.get(ADJUSTMENTS_KEY) || [];
     const initialLength = adjustments.length;
 
     // Lọc bỏ adjustment cần xóa
@@ -179,8 +129,8 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Ghi lại vào file
-    await writeAdjustments(adjustments);
+    // Ghi lại vào KV store
+    await kv.set(ADJUSTMENTS_KEY, adjustments);
 
     console.log(`[DELETE] Deleted successfully. Total count: ${adjustments.length}`);
     return NextResponse.json({ success: true, message: 'Adjustment deleted' });
