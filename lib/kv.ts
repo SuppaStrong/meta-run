@@ -74,7 +74,7 @@ class KVStore {
    * GET - Lấy giá trị từ Redis
    * Tương tự kv.get() của Vercel KV
    */
-  async get<T = any>(key: string): Promise<T | null> {
+  async get<T>(key: string): Promise<T | null> {
     try {
       const client = await this.getClient();
       const value = await client.get(key);
@@ -94,7 +94,7 @@ class KVStore {
    * SET - Lưu giá trị vào Redis
    * Tương tự kv.set() của Vercel KV
    */
-  async set<T = any>(key: string, value: T): Promise<void> {
+  async set<T>(key: string, value: T): Promise<void> {
     try {
       const client = await this.getClient();
       await client.set(key, JSON.stringify(value));
@@ -133,7 +133,7 @@ class KVStore {
 
 // Export singleton instance với API giống Vercel KV
 export const kv = {
-  get: <T = any>(key: string) => KVStore.getInstance().get<T>(key),
-  set: <T = any>(key: string, value: T) => KVStore.getInstance().set<T>(key, value),
-  del: (key: string) => KVStore.getInstance().del(key),
+  get: <T>(key: string): Promise<T | null> => KVStore.getInstance().get<T>(key),
+  set: <T>(key: string, value: T): Promise<void> => KVStore.getInstance().set<T>(key, value),
+  del: (key: string): Promise<void> => KVStore.getInstance().del(key),
 };
