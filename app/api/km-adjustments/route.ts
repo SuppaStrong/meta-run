@@ -72,8 +72,8 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date');
     const bibNumber = searchParams.get('bibNumber');
 
-    // Đọc tất cả adjustments
-    let adjustments = await readAdjustments();
+    // Đọc tất cả adjustments - DÙNG CONST thay vì LET
+    const adjustments = await readAdjustments();
     let filtered = adjustments;
 
     // Filter theo date nếu có
