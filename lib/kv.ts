@@ -34,7 +34,7 @@ class KVStore {
   }
 
   private async createConnection(): Promise<RedisClientType> {
-    const redisUrl = process.env.REDIS_URL;
+    const redisUrl = "redis://default:WshdDzlGBnjwpYyNUx4trNHEtQ17usFC@redis-17349.crce194.ap-seast-1-1.ec2.redns.redis-cloud.com:17349";
     
     if (!redisUrl) {
       throw new Error('REDIS_URL environment variable is not set');
