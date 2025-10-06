@@ -1004,7 +1004,7 @@ export default function App() {
 
           <div className="relative container mx-auto px-3 md:px-4 py-6 md:py-8 lg:py-20">
             <div className="max-w-6xl mx-auto">
-              <h1 className="text-2xl md:text-4xl lg:text-6xl font-black text-white mb-4 md:mb-6 text-shadow-lg animate-fade-in-up">
+              <h1 className="text-2xl text-center md:text-4xl lg:text-6xl font-black text-white mb-4 md:mb-6 text-shadow-lg animate-fade-in-up">
                 {raceInfo?.meta_title || raceInfo?.title || 'META RUN 2025'}
               </h1>
 
